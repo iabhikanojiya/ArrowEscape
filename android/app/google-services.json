@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "227368534831",
+    "project_id": "arrow-escape-c84f2",
+    "storage_bucket": "arrow-escape-c84f2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:227368534831:android:4e87149b4f7a10b710d7da",
+        "android_client_info": {
+          "package_name": "com.arrow.escape.arrow_escape"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCexPBEkxWmIBNb_ic6rv0cvfnR_DXrKJQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
