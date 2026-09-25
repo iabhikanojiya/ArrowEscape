@@ -4,8 +4,12 @@ class AppConstants {
   
   static const int maxLevels = 1000;
   static const int initialUnlockedLevel = 1;
+
+  /// TEMPORARY (UI review): shows every level as unlocked in level select.
+  /// Stored progress is untouched. Set back to false before release.
+  static const bool unlockAllLevels = false;
   
-  static const Duration splashDuration = Duration(seconds: 2);
+  static const Duration splashDuration = Duration(milliseconds: 1200);
   static const Duration animationDuration = Duration(milliseconds: 300);
   static const Duration fastAnimationDuration = Duration(milliseconds: 150);
   
@@ -29,7 +33,7 @@ class AppConstants {
 
   static const int initialHearts = 5;
   static const int maxHearts = 5;
-  static const int initialCoins = 50;
+  static const int initialCoins = 10;
   static const int hintCostCoins = 10;
   static const int coinsRewardBase = 10;
   static const int coinsRewardPerDifficulty = 2;

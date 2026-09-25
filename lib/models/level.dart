@@ -10,6 +10,12 @@ class Level {
   final int? difficulty;
   final String? difficultyName;
 
+  // New world/shape metadata (data-driven, backward compatible)
+  final int? world;
+  final String? worldName;
+  final String? shapeName;
+  final String? category;
+
   Level({
     required this.levelId,
     required this.gridSize,
@@ -18,12 +24,22 @@ class Level {
     this.name,
     this.difficulty,
     this.difficultyName,
-  })  : arrows = arrows ?? const [],
-        puzzlePaths = puzzlePaths ?? const [];
+    this.world,
+    this.worldName,
+    this.shapeName,
+    this.category,
+  }) : arrows = arrows ?? const [],
+       puzzlePaths = puzzlePaths ?? const [];
 
   factory Level.fromJson(Map<String, dynamic> json) {
     final int levelId = json['levelId'] as int;
     final int gridSize = json['gridSize'] as int;
+
+    final int? world = json['world'] as int?;
+    final String? worldName = json['worldName'] as String?;
+    final String? shapeName =
+        json['shapeName'] as String? ?? json['name'] as String?;
+    final String? category = json['category'] as String?;
 
     // New path based format
     if (json.containsKey('paths') && json['paths'] is List) {
@@ -35,9 +51,13 @@ class Level {
         gridSize: gridSize,
         arrows: const [],
         puzzlePaths: paths,
-        name: json['name'] as String?,
+        name: json['name'] as String? ?? shapeName,
         difficulty: json['difficulty'] as int?,
         difficultyName: json['difficultyName'] as String?,
+        world: world,
+        worldName: worldName,
+        shapeName: shapeName,
+        category: category,
       );
     }
 
@@ -49,9 +69,13 @@ class Level {
           .map((e) => LevelArrow.fromJson(e as Map<String, dynamic>))
           .toList(),
       puzzlePaths: const [],
-      name: json['name'] as String?,
+      name: json['name'] as String? ?? shapeName,
       difficulty: json['difficulty'] as int?,
       difficultyName: json['difficultyName'] as String?,
+      world: world,
+      worldName: worldName,
+      shapeName: shapeName,
+      category: category,
     );
   }
 
@@ -76,7 +100,12 @@ class Level {
     }
 
     final colorIndex = json['colorIndex'] as int? ?? 0;
-    return PuzzlePath(id: id, points: points, direction: dir, colorIndex: colorIndex);
+    return PuzzlePath(
+      id: id,
+      points: points,
+      direction: dir,
+      colorIndex: colorIndex,
+    );
   }
 
   static ArrowDirection _parseDirection(String value) {
@@ -101,15 +130,21 @@ class Level {
       'name': name,
       'difficulty': difficulty,
       'difficultyName': difficultyName,
+      'world': world,
+      'worldName': worldName,
+      'shapeName': shapeName,
+      'category': category,
     };
     if (puzzlePaths.isNotEmpty) {
       map['paths'] = puzzlePaths
-          .map((p) => {
-                'id': p.id,
-                'points': p.points.map((pt) => [pt.x, pt.y]).toList(),
-                'direction': p.direction.name,
-                'colorIndex': p.colorIndex,
-              })
+          .map(
+            (p) => {
+              'id': p.id,
+              'points': p.points.map((pt) => [pt.x, pt.y]).toList(),
+              'direction': p.direction.name,
+              'colorIndex': p.colorIndex,
+            },
+          )
           .toList();
     } else {
       map['arrows'] = arrows.map((e) => e.toJson()).toList();
@@ -120,24 +155,28 @@ class Level {
   List<Arrow> createArrows() {
     if (arrows.isNotEmpty) {
       return arrows
-          .map((data) => Arrow(
-                id: data.id.toString(),
-                row: data.row,
-                column: data.column,
-                direction: data.direction,
-                colorIndex: data.colorIndex ?? _getDefaultColorIndex(data.id),
-              ))
+          .map(
+            (data) => Arrow(
+              id: data.id.toString(),
+              row: data.row,
+              column: data.column,
+              direction: data.direction,
+              colorIndex: data.colorIndex ?? _getDefaultColorIndex(data.id),
+            ),
+          )
           .toList();
     }
     // Convert puzzlePaths single-head fallback for legacy engine
     return puzzlePaths
-        .map((p) => Arrow(
-              id: p.id,
-              row: p.head.y,
-              column: p.head.x,
-              direction: p.direction,
-              colorIndex: p.colorIndex,
-            ))
+        .map(
+          (p) => Arrow(
+            id: p.id,
+            row: p.head.y,
+            column: p.head.x,
+            direction: p.direction,
+            colorIndex: p.colorIndex,
+          ),
+        )
         .toList();
   }
 
@@ -147,12 +186,14 @@ class Level {
     }
     // Convert legacy arrows to single-point paths
     return arrows
-        .map((a) => PuzzlePath(
-              id: a.id.toString(),
-              points: [GridPoint(a.column, a.row)],
-              direction: a.direction,
-              colorIndex: a.colorIndex ?? _getDefaultColorIndex(a.id),
-            ))
+        .map(
+          (a) => PuzzlePath(
+            id: a.id.toString(),
+            points: [GridPoint(a.column, a.row)],
+            direction: a.direction,
+            colorIndex: a.colorIndex ?? _getDefaultColorIndex(a.id),
+          ),
+        )
         .toList();
   }
 
@@ -161,8 +202,10 @@ class Level {
   }
 
   bool get isValid {
-    if (gridSize < 3 || gridSize > 12) return false;
-    final effectiveCount = puzzlePaths.isNotEmpty ? puzzlePaths.length : arrows.length;
+    if (gridSize < 3 || gridSize > 30) return false;
+    final effectiveCount = puzzlePaths.isNotEmpty
+        ? puzzlePaths.length
+        : arrows.length;
     if (effectiveCount == 0) return false;
 
     if (puzzlePaths.isNotEmpty) {
@@ -278,9 +321,7 @@ class LevelCollection {
   }
 
   Map<String, dynamic> toJson() {
-    return {
-      'levels': levels.map((e) => e.toJson()).toList(),
-    };
+    return {'levels': levels.map((e) => e.toJson()).toList()};
   }
 
   Level? getLevel(int levelId) {
@@ -292,6 +333,8 @@ class LevelCollection {
   }
 
   List<Level> getLevelsInRange(int start, int end) {
-    return levels.where((level) => level.levelId >= start && level.levelId <= end).toList();
+    return levels
+        .where((level) => level.levelId >= start && level.levelId <= end)
+        .toList();
   }
 }

@@ -19,172 +19,131 @@ const double _dimension = 360;
 const double _margin = 48;
 
 void main() {
-  group('Test shape from spec #24 - multi-turn right', () {
-    final path = _path('mt', [
-      [0, 4],
-      [2, 4],
-      [2, 1],
-      [6, 1],
-      [6, 3],
-      [8, 3],
-    ], ArrowDirection.right);
-
-    final runway = PathGeometry.headExitExtension(
-        path, _cell, _dimension, _margin);
-    final trace =
-        PathGeometry.buildTracedPath(path, _cell, exitExtension: runway);
-
-    test('runway extends the head beyond the board along final tangent', () {
-      final headPx =
-          PathGeometry.toPixel(path.head, _cell, Offset.zero);
-      expect(runway, closeTo(_dimension - headPx.dx + _margin, 1e-6));
-      final last = trace.vertices.last;
-      final head = trace.vertices[trace.vertices.length - 2];
-      expect(last.dx, closeTo(head.dx + runway, 1e-6));
-      expect(last.dy, closeTo(head.dy, 1e-6));
-      expect(last.dx, greaterThanOrEqualTo(_dimension + _margin - 0.01));
-    });
-
-    test('total length equals track plus runway', () {
-      var trackPx = 0.0;
-      for (int i = 1; i < trace.vertices.length; i++) {
-        trackPx += (trace.vertices[i] - trace.vertices[i - 1]).distance;
-      }
-      expect(trace.length, closeTo(trackPx, 1e-6));
-    });
-
-    test('path is consumed behind the moving arrowhead', () {
-      for (final p in const [0.15, 0.35, 0.55, 0.8]) {
-        final d = p * trace.length;
-        final visible = trace.metric.extractPath(d, trace.length);
-        final visibleMetrics = visible.computeMetrics().toList();
-        final visibleLength = visibleMetrics.fold<double>(
-            0, (sum, m) => sum + m.length);
-        expect(visibleLength, closeTo(trace.length - d, 1e-2),
-            reason: 'consumed length must equal travelled length at p=$p');
-      }
-    });
-
-    test('nothing remains once the arrowhead has exited', () {
-      final visible = trace.metric.extractPath(trace.length, trace.length);
-      expect(visible.computeMetrics().isEmpty, isTrue);
-    });
-
-    test('arrowhead follows the exact geometry through every corner', () {
-      final cumulative = <double>[0];
-      for (int i = 1; i < trace.vertices.length; i++) {
-        cumulative.add(cumulative.last +
-            (trace.vertices[i] - trace.vertices[i - 1]).distance);
-      }
-
-      for (int i = 0; i < trace.vertices.length - 1; i++) {
-        for (final eps in const [0.5, 4.0]) {
-          final probe = math.min(cumulative[i] + eps, trace.length - 0.01);
-          final tangent = trace.metric.getTangentForOffset(probe);
-          if (tangent == null) continue;
-
-          final expectedDir =
-              (trace.vertices[i + 1] - trace.vertices[i]) /
-                  (trace.vertices[i + 1] - trace.vertices[i]).distance;
-          expect(tangent.vector.dx, closeTo(expectedDir.dx, 1e-6),
-              reason: 'tangent x after vertex $i must match segment');
-          expect(tangent.vector.dy, closeTo(expectedDir.dy, 1e-6),
-              reason: 'tangent y after vertex $i must match segment');
-        }
-      }
-    });
-
-    test('no teleportation between segments (positions continuous)', () {
-      final corners = <double>[0];
-      for (int i = 1; i < trace.vertices.length - 1; i++) {
-        corners.add(corners.last +
-            (trace.vertices[i] - trace.vertices[i - 1]).distance);
-      }
-
-      for (final c in corners.skip(1)) {
-        final before = trace.metric.getTangentForOffset(c - 0.01)!.position;
-        final at = trace.metric.getTangentForOffset(math.min(c + 0.01,
-            trace.length - 0.01))!.position;
-        expect((at - before).distance, lessThan(0.5),
-            reason: 'arrowhead jumped across a corner');
-        final vertexPos = trace.metric
-            .getTangentForOffset(math.min(c, trace.length - 0.01))!
-            .position;
-        expect((vertexPos - before).distance, lessThan(0.5));
-      }
-    });
-
-    test('head orientation rotates with the tangent at each turn', () {
-      final cumulative = <double>[0];
-      for (int i = 1; i < trace.vertices.length; i++) {
-        cumulative.add(cumulative.last +
-            (trace.vertices[i] - trace.vertices[i - 1]).distance);
-      }
-
-      double angleAt(double dist) {
-        final t = trace.metric
-            .getTangentForOffset(math.min(dist, trace.length - 0.01))!;
-        return math.atan2(t.vector.dy, t.vector.dx) * 180 / math.pi;
-      }
-
-      double mid(int leg) =>
-          (cumulative[leg] + cumulative[leg + 1]) / 2;
-
-      expect(angleAt(mid(0)), closeTo(0, 1e-6),
-          reason: 'segment 1 heads RIGHT');
-      expect(angleAt(mid(1)), closeTo(-90, 1e-6),
-          reason: 'segment 2 heads UP after corner 1');
-      expect(angleAt(mid(2)), closeTo(0, 1e-6),
-          reason: 'segment 3 heads DOWN after corner 2');
-      expect(angleAt(mid(3)), closeTo(90, 1e-6),
-          reason: 'segment 4 heads DOWN after corner 3');
-      expect(angleAt(mid(4)), closeTo(0, 1e-6),
-          reason: 'final segment heads RIGHT');
-    });
-  });
-
-  group('other directions fully exit the board', () {
-    final cases = <String, PuzzlePath>{
-      'left': _path('l', [
+  // Tapped arrows slither: the arrowhead leads, the body keeps its full
+  // length and flows through its own bends, then everything leaves the board
+  // along the arrowhead (final segment) direction.
+  group('slither escape follows the arrowhead direction', () {
+    final cases = <ArrowDirection, PuzzlePath>{
+      ArrowDirection.up: _path('u', [
+        [1, 8],
+        [1, 5],
+        [5, 5],
+        [5, 2],
+      ], ArrowDirection.up),
+      ArrowDirection.down: _path('d', [
+        [0, 0],
+        [3, 0],
+        [3, 7],
+      ], ArrowDirection.down),
+      ArrowDirection.left: _path('l', [
         [8, 1],
         [5, 1],
         [5, 3],
         [2, 3],
       ], ArrowDirection.left),
-      'down': _path('d', [
-        [0, 0],
-        [3, 0],
-        [3, 7],
-      ], ArrowDirection.down),
-      'up': _path('u', [
-        [1, 8],
-        [1, 5],
-        [5, 5],
-        [5, 0],
-      ], ArrowDirection.up),
-      'straight right': _path('r', [
+      ArrowDirection.right: _path('r', [
         [0, 4],
-        [3, 4],
+        [2, 4],
+        [2, 1],
+        [6, 1],
+        [6, 3],
+        [7, 3],
       ], ArrowDirection.right),
     };
 
-    cases.forEach((name, path) {
-      test('$name arrow ends completely outside the board', () {
-        final runway =
-            PathGeometry.headExitExtension(path, _cell, _dimension, _margin);
-        final trace = PathGeometry.buildTracedPath(path, _cell,
-            exitExtension: runway);
+    cases.forEach((dir, path) {
+      final body = PathGeometry.buildTracedPath(path, _cell).length;
+      final runway = PathGeometry.slitherRunway(
+        path,
+        _cell,
+        _dimension,
+        _margin,
+        body,
+      );
+      final trace = PathGeometry.buildTracedPath(
+        path,
+        _cell,
+        exitExtension: runway,
+      );
+      final travel = trace.length - body;
+      Offset headAt(double p) =>
+          trace.metric.getTangentForOffset(p * travel + body)!.position;
+      Offset headDirAt(double p) => trace.metric
+          .getTangentForOffset(
+            math.min(p * travel + body, trace.length - 0.01),
+          )!
+          .vector;
 
-        final end = trace.vertices.last;
-        switch (path.direction) {
-          case ArrowDirection.right:
-            expect(end.dx, greaterThanOrEqualTo(_dimension + _margin - 0.01));
-          case ArrowDirection.left:
-            expect(end.dx, lessThanOrEqualTo(-_margin + 0.01));
-          case ArrowDirection.down:
-            expect(end.dy, greaterThanOrEqualTo(_dimension + _margin - 0.01));
-          case ArrowDirection.up:
-            expect(end.dy, lessThanOrEqualTo(-_margin + 0.01));
+      test('${dir.name}: exit runway points ${dir.name}', () {
+        expect(path.direction, dir);
+        final v = trace.vertices;
+        final run = (v.last - v[v.length - 2]) / runway;
+        expect(run.dx, closeTo(dir.vector.dx, 1e-9));
+        expect(run.dy, closeTo(dir.vector.dy, 1e-9));
+      });
+
+      test('${dir.name}: starts exactly where the arrow is drawn', () {
+        final headPx = PathGeometry.toPixel(path.head, _cell, Offset.zero);
+        expect((headAt(0) - headPx).distance, lessThan(1e-6));
+      });
+
+      test('${dir.name}: body keeps its full length while slithering', () {
+        for (final p in const [0.0, 0.2, 0.5, 0.8, 1.0]) {
+          final start = p * travel;
+          final window = trace.metric.extractPath(start, start + body);
+          final len = window.computeMetrics().fold<double>(
+            0,
+            (sum, m) => sum + m.length,
+          );
+          expect(len, closeTo(body, 1e-2), reason: 'p=$p');
+        }
+      });
+
+      test('${dir.name}: arrowhead follows every bend of its own path', () {
+        final segs = <Offset>[];
+        for (int i = 1; i < path.points.length; i++) {
+          final a = PathGeometry.toPixel(
+            path.points[i - 1],
+            _cell,
+            Offset.zero,
+          );
+          final b = PathGeometry.toPixel(path.points[i], _cell, Offset.zero);
+          segs.add((b - a) / (b - a).distance);
+        }
+        // Sample the tail's track: the head later passes over it too.
+        var along = 0.0;
+        for (int i = 0; i < segs.length; i++) {
+          final a = PathGeometry.toPixel(path.points[i], _cell, Offset.zero);
+          final b = PathGeometry.toPixel(
+            path.points[i + 1],
+            _cell,
+            Offset.zero,
+          );
+          final mid = along + (b - a).distance / 2;
+          final t = trace.metric.getTangentForOffset(mid)!.vector;
+          expect(t.dx, closeTo(segs[i].dx, 1e-6));
+          expect(t.dy, closeTo(segs[i].dy, 1e-6));
+          along += (b - a).distance;
+        }
+        // Once past its original head, the arrowhead travels in `dir`.
+        final t = headDirAt(0.5);
+        expect(t.dx, closeTo(dir.vector.dx, 1e-6));
+        expect(t.dy, closeTo(dir.vector.dy, 1e-6));
+      });
+
+      test('${dir.name}: whole arrow ends completely outside the board', () {
+        final window = trace.metric
+            .extractPath(travel, trace.length)
+            .computeMetrics()
+            .first;
+        for (double d = 0; d <= window.length; d += 2) {
+          final pt = window.getTangentForOffset(d)!.position;
+          final outside =
+              pt.dx <= 0 ||
+              pt.dy <= 0 ||
+              pt.dx >= _dimension ||
+              pt.dy >= _dimension;
+          expect(outside, isTrue, reason: 'body point $pt still on board');
         }
       });
     });

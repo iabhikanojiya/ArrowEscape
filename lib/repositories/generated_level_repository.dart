@@ -1,7 +1,7 @@
 import 'dart:math' as math;
 
 import '../core/constants/app_constants.dart';
-import '../game/engine/level_generator.dart';
+import '../game/levels/shape_level_generator.dart';
 import '../models/level.dart';
 import 'level_repository.dart';
 
@@ -21,7 +21,7 @@ class GeneratedLevelRepository implements LevelRepository {
 
   Level? getLevelSync(int levelId) {
     final clamped = math.min(math.max(levelId, 1), AppConstants.maxLevels);
-    return _cache[clamped] ??= LevelGenerator.generate(clamped);
+    return _cache[clamped] ??= ShapeLevelGenerator.generate(clamped);
   }
 
   @override
@@ -39,7 +39,11 @@ class GeneratedLevelRepository implements LevelRepository {
   @override
   Future<List<Level>> getLevelsInRange(int start, int end) async {
     final result = <Level>[];
-    for (int i = math.max(1, start); i <= math.min(AppConstants.maxLevels, end); i++) {
+    for (
+      int i = math.max(1, start);
+      i <= math.min(AppConstants.maxLevels, end);
+      i++
+    ) {
       result.add(getLevelSync(i)!);
     }
     return result;

@@ -34,8 +34,8 @@ class PuzzleBoard extends StatefulWidget {
 
 class _PuzzleBoardState extends State<PuzzleBoard>
     with TickerProviderStateMixin {
-  static const double _minScale = 0.75;
-  static const double _maxScale = 3.0;
+  static const double _minScale = 0.85;
+  static const double _maxScale = 2.8;
 
   late final AnimationController _moveController;
   late final AnimationController _shakeController;
@@ -48,6 +48,7 @@ class _PuzzleBoardState extends State<PuzzleBoard>
 
   final Map<String, TracedPath> _shapeCache = {};
   TracedPath? _activeTrace;
+  double _moveBodyLength = 0;
 
   @override
   void initState() {
@@ -122,7 +123,9 @@ class _PuzzleBoardState extends State<PuzzleBoard>
     if (_shakeController.isAnimating || _moveController.isAnimating) return;
 
     if (_side <= 0) return;
-    final path = _hitTest(details.localPosition, _side);
+    // Convert tap position to scene coordinates to handle zoom/pan correctly.
+    final scenePoint = _transform.toScene(details.localPosition);
+    final path = _hitTest(scenePoint, _side);
     if (path == null) return;
 
     widget.onTapPath?.call(path);
@@ -133,12 +136,22 @@ class _PuzzleBoardState extends State<PuzzleBoard>
       if (engine.beginMove(path)) {
         final cell = PathGeometry.cellSizeFor(_side, engine.boardSize);
         final stroke = (cell * 0.20).clamp(7.0, 12.0).toDouble();
-        final runway = PathGeometry.headExitExtension(
-            path, cell, _side, stroke * 4);
-        _activeTrace =
-            PathGeometry.buildTracedPath(path, cell, exitExtension: runway);
-        _moveController.duration =
-            PathGeometry.escapeDuration(_activeTrace!.length, cell);
+        // Slither escape: the body flows through its own bends, then out
+        // along the arrowhead direction (the canonical escape direction).
+        final cornerRadius = PathGeometry.cornerRadiusFor(cell);
+        _moveBodyLength = PathGeometry.buildTracedPath(path, cell,
+                roundedCorners: true, cornerRadius: cornerRadius)
+            .length;
+        _activeTrace = PathGeometry.buildTracedPath(
+          path,
+          cell,
+          exitExtension: PathGeometry.slitherRunway(
+              path, cell, _side, stroke * 4, _moveBodyLength),
+          roundedCorners: true,
+          cornerRadius: cornerRadius,
+        );
+        _moveController.duration = PathGeometry.escapeDuration(
+            _activeTrace!.length - _moveBodyLength, cell);
         setState(() {});
         _moveController.forward(from: 0);
       }
@@ -185,6 +198,35 @@ class _PuzzleBoardState extends State<PuzzleBoard>
     return best;
   }
 
+  void _clampPanIfNeeded(double side) {
+    final m = _transform.value;
+    final scale = m.getMaxScaleOnAxis();
+    if (scale == 0) return;
+    final tx = m.storage[12];
+    final ty = m.storage[13];
+
+    // Keep at least ~62% of board visible; limit pan accordingly.
+    double maxPan = side * 0.38;
+    if (scale > 1) {
+      final extra = (side * scale - side) / 2;
+      maxPan = extra + side * 0.18;
+      final cap = side * scale * 0.40;
+      if (maxPan > cap) maxPan = cap;
+    } else if (scale < 1) {
+      maxPan = side * 0.22 * scale;
+    }
+
+    final nx = tx.clamp(-maxPan, maxPan);
+    final ny = ty.clamp(-maxPan, maxPan);
+    if (nx != tx || ny != ty) {
+      final clamped = Matrix4.copy(m);
+      clamped.storage[12] = nx;
+      clamped.storage[13] = ny;
+      // Animate clamp back for smoothness instead of jump
+      _transform.value = clamped;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final engine = widget.engine;
@@ -203,6 +245,8 @@ class _PuzzleBoardState extends State<PuzzleBoard>
                 : 320.0;
             final side = math.min(width, height);
             _side = side;
+            // Allow a little zoom-out (0.85) and limited pan so board stays mostly visible.
+            final panMargin = side * 0.22;
             return Center(
               child: SizedBox(
                 width: side,
@@ -211,8 +255,12 @@ class _PuzzleBoardState extends State<PuzzleBoard>
                   transformationController: _transform,
                   minScale: _minScale,
                   maxScale: _maxScale,
+                  boundaryMargin: EdgeInsets.all(panMargin),
+                  constrained: true,
+                  clipBehavior: Clip.none,
                   panEnabled: true,
                   scaleEnabled: true,
+                  onInteractionEnd: (_) => _clampPanIfNeeded(side),
                   child: GestureDetector(
                     behavior: HitTestBehavior.translucent,
                     onTapUp: _handleTapUp,
@@ -224,6 +272,7 @@ class _PuzzleBoardState extends State<PuzzleBoard>
                         movingPathId: engine.animatingPathId,
                         moveProgress: _moveController.value,
                         activeTrace: _activeTrace,
+                        moveBodyLength: _moveBodyLength,
                         blockedPathId: _blockedPathId,
                         shakeProgress: _shakeController.value,
                         hintPathId: widget.hintPathId,

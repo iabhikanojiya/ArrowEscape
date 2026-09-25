@@ -25,18 +25,24 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
-  await _initFirebase();
-
+  // Firebase and settings load in parallel; both are needed before the
+  // first frame (crash reporting, sound/haptics preferences).
   final settings = createSettingsService();
+  await Future.wait([
+    _initFirebase(),
+    settings.init().catchError((_) {}),
+  ]);
   try {
-    await settings.init();
+    await HapticService.initialize(settings);
   } catch (_) {}
-  HapticService.initialize(settings);
   EconomyProvider.instance.init();
 
   runApp(const ArrowEscapeApp());
 
-  unawaited(AudioService.instance.initialize(settings: settings));
+  // Sound players load in the background (play() waits for them if needed).
+  unawaited(AudioService.instance
+      .initialize(settings: settings)
+      .catchError((_) {}));
   unawaited(_initAds());
 }
 

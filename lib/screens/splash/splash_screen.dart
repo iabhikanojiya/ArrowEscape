@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../core/constants/app_constants.dart';
+import '../../core/theme/app_theme.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -14,9 +15,23 @@ class SplashScreen extends StatefulWidget {
 class _SplashScreenState extends State<SplashScreen>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
-  late Animation<double> _slideAnimation;
+
+  // Icon - slides from above first
+  late Animation<Offset> _iconSlide;
+  late Animation<double> _iconFade;
+  late Animation<double> _iconScale;
+
+  // App name - slides from above second
+  late Animation<Offset> _nameSlide;
+  late Animation<double> _nameFade;
+
+  // Tagline - slides from above third
+  late Animation<Offset> _taglineSlide;
+  late Animation<double> _taglineFade;
+
+  // Loader at bottom
+  late Animation<double> _loaderFade;
+
   Timer? _navigationTimer;
 
   @override
@@ -27,24 +42,68 @@ class _SplashScreenState extends State<SplashScreen>
       vsync: this,
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.5, end: 1.0).animate(
+    _iconSlide = Tween<Offset>(
+      begin: const Offset(0, -4.5),
+      end: Offset.zero,
+    ).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.0, 0.6, curve: Curves.easeOutBack),
+        curve: const Interval(0.0, 0.60, curve: Curves.easeOutCubic),
       ),
     );
 
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+    _iconFade = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+        curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
       ),
     );
 
-    _slideAnimation = Tween<double>(begin: 30.0, end: 0.0).animate(
+    _iconScale = Tween<double>(begin: 0.82, end: 1.0).animate(
       CurvedAnimation(
         parent: _controller,
-        curve: const Interval(0.3, 0.8, curve: Curves.easeOutCubic),
+        curve: const Interval(0.0, 0.60, curve: Curves.easeOutBack),
+      ),
+    );
+
+    _nameSlide = Tween<Offset>(
+      begin: const Offset(0, -8.0),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.15, 0.70, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _nameFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.15, 0.48, curve: Curves.easeOut),
+      ),
+    );
+
+    _taglineSlide = Tween<Offset>(
+      begin: const Offset(0, -10.0),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.30, 0.82, curve: Curves.easeOutCubic),
+      ),
+    );
+
+    _taglineFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.30, 0.60, curve: Curves.easeOut),
+      ),
+    );
+
+    _loaderFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _controller,
+        curve: const Interval(0.65, 0.92, curve: Curves.easeOut),
       ),
     );
 
@@ -67,129 +126,124 @@ class _SplashScreenState extends State<SplashScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
       backgroundColor: theme.colorScheme.surface,
-      body: Center(
+      body: SafeArea(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                return Transform.scale(
-                  scale: _scaleAnimation.value,
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(28),
-                        color: theme.colorScheme.primary,
-                        boxShadow: [
-                          BoxShadow(
-                            color: theme.colorScheme.primary.withValues(alpha: 0.3),
-                            blurRadius: 30,
-                            offset: const Offset(0, 10),
-                          ),
-                        ],
-                      ),
-                      child: Center(
-                        child: CustomPaint(
-                          size: const Size(60, 60),
-                          painter: _ArrowLogoPainter(
-                            color: Colors.white,
-                          ),
+            // Center content - icon + name + tagline (all slide from above)
+            Expanded(
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // App Icon
+                    SlideTransition(
+                      position: _iconSlide,
+                      child: FadeTransition(
+                        opacity: _iconFade,
+                        child: ScaleTransition(
+                          scale: _iconScale,
+                          child: _buildAppIcon(),
                         ),
                       ),
                     ),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 24),
-            AnimatedBuilder(
-              animation: _controller,
-              builder: (context, child) {
-                return SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 1),
-                    end: Offset.zero,
-                  ).animate(_slideAnimation),
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: Column(
-                      children: [
-                        Text(
+
+                    const SizedBox(height: 24),
+
+                    // App Name
+                    SlideTransition(
+                      position: _nameSlide,
+                      child: FadeTransition(
+                        opacity: _nameFade,
+                        child: Text(
                           AppConstants.appName,
+                          textAlign: TextAlign.center,
                           style: theme.textTheme.displaySmall?.copyWith(
                             fontWeight: FontWeight.w800,
-                            letterSpacing: -0.5,
+                            letterSpacing: -0.8,
+                            fontSize: 34,
+                            height: 1.0,
+                            color: isDark ? Colors.white : AppTheme.ink,
                           ),
                         ),
-                        const SizedBox(height: 8),
-                        Text(
-                          AppConstants.tagline,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.onSurfaceVariant,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
-                  ),
-                );
-              },
+
+                    const SizedBox(height: 10),
+
+                    // Tagline
+                    SlideTransition(
+                      position: _taglineSlide,
+                      child: FadeTransition(
+                        opacity: _taglineFade,
+                        child: Text(
+                          AppConstants.tagline,
+                          textAlign: TextAlign.center,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: AppTheme.subtleText,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.15,
+                            fontSize: 14.5,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            // Loading at bottom - only element at bottom
+            FadeTransition(
+              opacity: _loaderFade,
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 36, top: 12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.6,
+                        valueColor: AlwaysStoppedAnimation<Color>(
+                          AppTheme.accent,
+                        ),
+                        backgroundColor: AppTheme.accent.withValues(alpha: 0.12),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Loading',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.8,
+                        color: AppTheme.subtleText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
       ),
     );
   }
-}
 
-class _ArrowLogoPainter extends CustomPainter {
-  final Color color;
-
-  _ArrowLogoPainter({required this.color});
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2;
-
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
-
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(-3.14159 / 4);
-
-    final arrowHeight = radius * 1.1;
-    final arrowWidth = radius * 0.7;
-    final shaftWidth = radius * 0.3;
-    final shaftHeight = arrowHeight * 0.55;
-
-    final path = Path();
-
-    path.moveTo(0, -arrowHeight / 2);
-    path.lineTo(-arrowWidth / 2, -arrowHeight / 2 + shaftHeight);
-    path.lineTo(-shaftWidth / 2, -arrowHeight / 2 + shaftHeight);
-    path.lineTo(-shaftWidth / 2, arrowHeight / 2);
-    path.lineTo(shaftWidth / 2, arrowHeight / 2);
-    path.lineTo(shaftWidth / 2, -arrowHeight / 2 + shaftHeight);
-    path.lineTo(arrowWidth / 2, -arrowHeight / 2 + shaftHeight);
-    path.close();
-
-    canvas.drawPath(path, paint);
-
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    return oldDelegate is _ArrowLogoPainter && oldDelegate.color != color;
+  Widget _buildAppIcon() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: Image.asset(
+        'assets/images/app_icon.png',
+        width: 124,
+        height: 124,
+        fit: BoxFit.cover,
+      ),
+    );
   }
 }

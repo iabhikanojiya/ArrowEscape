@@ -25,27 +25,43 @@ class AudioService {
 
   SettingsService? _settings;
   bool _enabled = true;
+  bool _initialized = false;
   final Map<GameSound, AudioPlayer?> _players = {};
 
-  Future<void> initialize({SettingsService? settings}) async {
-    _settings = settings ?? _settings;
+  Future<void>? _initializing;
+
+  /// Loads the sound players. Concurrent calls share one in-flight load, and
+  /// all players are prepared in parallel so startup is not held up.
+  Future<void> initialize({SettingsService? settings}) {
+    if (settings != null) _settings = settings;
+    return _initializing ??=
+        _load().whenComplete(() => _initializing = null);
+  }
+
+  Future<void> _load() async {
     if (_settings != null) {
       try {
         _enabled = await _settings!.getSoundEnabled();
       } catch (_) {}
     }
-    for (final sound in GameSound.values) {
-      if (_players.containsKey(sound)) continue;
-      try {
-        final player = AudioPlayer(playerId: 'fx_${sound.name}')
-          ..setReleaseMode(ReleaseMode.stop);
-        await player.setPlayerMode(PlayerMode.lowLatency);
-        await player.setVolume(_volumeFor(sound));
-        await player.setSource(AssetSource('sounds/${sound.fileName}'));
-        _players[sound] = player;
-      } catch (_) {
-        _players[sound] = null;
-      }
+    await Future.wait([
+      for (final sound in GameSound.values)
+        if (_players[sound] == null) _loadPlayer(sound),
+    ]);
+    _initialized = true;
+  }
+
+  Future<void> _loadPlayer(GameSound sound) async {
+    try {
+      final player = AudioPlayer(playerId: 'fx_${sound.name}')
+        ..setReleaseMode(ReleaseMode.stop);
+      await player.setPlayerMode(PlayerMode.lowLatency);
+      await player.setVolume(_volumeFor(sound));
+      // Pre-load source; play() will re-set it each time for reliability
+      await player.setSource(AssetSource('sounds/${sound.fileName}'));
+      _players[sound] = player;
+    } catch (_) {
+      _players[sound] = null;
     }
   }
 
@@ -58,16 +74,76 @@ class AudioService {
       try {
         await settings.setSoundEnabled(value);
       } catch (_) {}
+    } else {
+      // Fallback: persist via new instance if _settings not yet set
+      try {
+        final s = createSettingsService();
+        await s.init();
+        await s.setSoundEnabled(value);
+        _settings = s;
+      } catch (_) {}
     }
   }
 
-  void play(GameSound sound) {
+  /// Plays [sound] respecting [_enabled].
+  /// Fixed to work reliably after first interaction:
+  /// - correctly sequences stop -> play with AssetSource
+  /// - falls back to transient player if pooled player fails
+  /// - reinitializes lazily if initialize not yet completed
+  Future<void> play(GameSound sound) async {
     if (!_enabled) return;
+    if (!_initialized) {
+      try {
+        await initialize();
+      } catch (_) {}
+    }
+    // Refresh enabled from settings to respect changes made via other instances
+    if (_settings != null) {
+      try {
+        _enabled = await _settings!.getSoundEnabled();
+        if (!_enabled) return;
+      } catch (_) {}
+    }
+
+    final double volume = _volumeFor(sound);
     final player = _players[sound];
-    if (player == null) return;
-    player
-      ..stop()
-      ..resume().catchError((_) => null);
+
+    if (player != null) {
+      try {
+        // Ensure any previous playback is stopped before starting new one
+        try {
+          await player.stop();
+        } catch (_) {}
+        // lowLatency + fresh AssetSource play is most reliable after stop
+        await player.setVolume(volume);
+        await player.play(
+          AssetSource('sounds/${sound.fileName}'),
+          volume: volume,
+          mode: PlayerMode.lowLatency,
+        );
+        return;
+      } catch (_) {
+        // fall through to transient fallback
+      }
+    }
+
+    // Fallback: one-shot transient player (guaranteed to work even if pool is broken)
+    try {
+      final tmp = AudioPlayer();
+      await tmp.setVolume(volume);
+      await tmp.play(
+        AssetSource('sounds/${sound.fileName}'),
+        volume: volume,
+        mode: PlayerMode.lowLatency,
+      );
+      // Auto-dispose after playback to avoid leaks
+      Future.delayed(const Duration(seconds: 2), () async {
+        try {
+          await tmp.stop();
+          await tmp.dispose();
+        } catch (_) {}
+      });
+    } catch (_) {}
   }
 
   double _volumeFor(GameSound sound) {
@@ -88,5 +164,6 @@ class AudioService {
       } catch (_) {}
     }
     _players.clear();
+    _initialized = false;
   }
 }

@@ -18,14 +18,17 @@ class PuzzlePainter extends CustomPainter {
   final int gridSize;
   final String? movingPathId;
 
-  /// 0..1 progress mapped linearly onto the traced path length
-  /// (track + exit runway). Linear easing keeps speed constant through
+  /// 0..1 progress of the escape. Linear so speed stays constant through
   /// corners.
   final double moveProgress;
 
-  /// Pre-built traced geometry for [movingPathId] including its off-board
-  /// runway. Null while no escape is animating.
+  /// Traced geometry for [movingPathId]: its own track plus the exit runway
+  /// along the arrowhead direction. Null while no escape is animating.
   final TracedPath? activeTrace;
+
+  /// Pixel length of the moving arrow's body; the slithering window keeps
+  /// exactly this length the whole way out.
+  final double moveBodyLength;
 
   final String? blockedPathId;
   final double shakeProgress;
@@ -40,6 +43,7 @@ class PuzzlePainter extends CustomPainter {
     this.movingPathId,
     this.moveProgress = 0,
     this.activeTrace,
+    this.moveBodyLength = 0,
     this.blockedPathId,
     this.shakeProgress = 0,
     this.hintPathId,
@@ -48,15 +52,37 @@ class PuzzlePainter extends CustomPainter {
     this.shapeCache,
   });
 
-  double _strokeWidth(double cell) => (cell * 0.20).clamp(7.0, 12.0);
+  // Thinner shafts for dense labyrinth levels (small gaps, clean 90° turns)
+  double _strokeWidth(double cell) => (cell * 0.095).clamp(2.6, 5.0);
 
   TracedPath _shapeFor(PuzzlePath path, double cell) {
+    // Display traces use subtly rounded bends and a shaft trimmed back by
+    // half a stroke so the round cap never pokes past the arrowhead tip.
+    // Logical vertices stay sharp for head placement and hit-testing.
+    // Radius/trim derive from cell size, so the existing cache key remains
+    // unique.
+    final stroke = _strokeWidth(cell);
     final cache = shapeCache;
     if (cache == null) {
-      return PathGeometry.buildTracedPath(path, cell);
+      return PathGeometry.buildTracedPath(
+        path,
+        cell,
+        roundedCorners: true,
+        cornerRadius: PathGeometry.cornerRadiusFor(cell),
+        endTrim: stroke / 2,
+      );
     }
     final key = '${path.id}|${cell.toStringAsFixed(2)}';
-    return cache.putIfAbsent(key, () => PathGeometry.buildTracedPath(path, cell));
+    return cache.putIfAbsent(
+      key,
+      () => PathGeometry.buildTracedPath(
+        path,
+        cell,
+        roundedCorners: true,
+        cornerRadius: PathGeometry.cornerRadiusFor(cell),
+        endTrim: stroke / 2,
+      ),
+    );
   }
 
   Paint _strokePaint(Color color, double width) {
@@ -78,7 +104,7 @@ class PuzzlePainter extends CustomPainter {
     }
 
     if (movingPathId != null && activeTrace != null) {
-      _drawTracingArrow(canvas, size, cell, stroke);
+      _drawSlitheringArrow(canvas, cell, stroke);
     }
 
     for (final path in paths) {
@@ -121,42 +147,66 @@ class PuzzlePainter extends CustomPainter {
       if (offset != Offset.zero) {
         canvas.translate(offset.dx, offset.dy);
       }
-      canvas.drawPath(shape.polyline, _strokePaint(color, stroke));
-      _drawHeadAt(
-        canvas,
-        shape.vertices.last,
-        _angleFor(path.direction),
-        stroke,
-        color,
+      // One pen for the whole piece: shaft and open-arrowhead wings share
+      // the exact same stroke so the head reads as the natural end of the
+      // line rather than an icon placed on top of it.
+      final pen = _strokePaint(color, stroke);
+      canvas.drawPath(shape.polyline, pen);
+      // Single head at the final endpoint, aligned purely with the final
+      // segment tangent (never the first/longest segment or bounding box).
+      final head = PathGeometry.arrowHead(
+        vertices: shape.vertices,
+        stroke: stroke,
+        cornerRadius: PathGeometry.cornerRadiusFor(cell),
+        fallbackAngle: _angleFor(path.direction),
       );
+      final wings = Path()
+        ..moveTo(head.tip.dx, head.tip.dy)
+        ..lineTo(head.wing1.dx, head.wing1.dy)
+        ..moveTo(head.tip.dx, head.tip.dy)
+        ..lineTo(head.wing2.dx, head.wing2.dy);
+      canvas.drawPath(wings, pen);
       canvas.restore();
     }
   }
 
-  /// The escaping arrow: the visible track is the unconsumed remainder of
-  /// the path, shrinking toward the exit. No travelling arrowhead is drawn.
-  void _drawTracingArrow(
-      Canvas canvas, Size size, double cell, double stroke) {
+  /// The escaping arrow slithers: a window of the body's full length slides
+  /// along its own track (through every bend) and then out along the exit
+  /// runway, which points in the arrowhead direction. The arrowhead leads,
+  /// turning with the track at each corner.
+  void _drawSlitheringArrow(Canvas canvas, double cell, double stroke) {
     final trace = activeTrace!;
     final total = trace.length;
     if (total <= 0) return;
+    final body = moveBodyLength.clamp(0.0, total);
+    final travel = total - body;
+    final start =
+        Curves.linear.transform(moveProgress.clamp(0.0, 1.0)) * travel;
+    final end = start + body;
 
-    final d = Curves.linear.transform(moveProgress.clamp(0.0, 1.0)) * total;
-
-    final consumedTrail = math.min(cell * 1.4, d);
-    if (consumedTrail > 0) {
-      canvas.drawPath(
-        trace.metric.extractPath(d - consumedTrail, d),
-        _strokePaint(PuzzlePalette.accent.withValues(alpha: 0.16), stroke),
-      );
+    final tangent = trace.metric.getTangentForOffset(math.min(end, total));
+    if (tangent == null) return;
+    final pen = _strokePaint(PuzzlePalette.accent, stroke);
+    // Trim the shaft half a stroke so its round cap never pokes past the tip.
+    final shaftEnd = math.max(start, end - stroke / 2);
+    if (shaftEnd > start) {
+      canvas.drawPath(trace.metric.extractPath(start, shaftEnd), pen);
     }
-
-    if (d < total) {
-      canvas.drawPath(
-        trace.metric.extractPath(d, total),
-        _strokePaint(PuzzlePalette.accent, stroke),
-      );
-    }
+    final tip = tangent.position;
+    final head = PathGeometry.arrowHead(
+      vertices: [tip - tangent.vector * cell, tip],
+      stroke: stroke,
+      cornerRadius: PathGeometry.cornerRadiusFor(cell),
+      fallbackAngle: math.atan2(tangent.vector.dy, tangent.vector.dx),
+    );
+    canvas.drawPath(
+      Path()
+        ..moveTo(head.tip.dx, head.tip.dy)
+        ..lineTo(head.wing1.dx, head.wing1.dy)
+        ..moveTo(head.tip.dx, head.tip.dy)
+        ..lineTo(head.wing2.dx, head.wing2.dy),
+      pen,
+    );
   }
 
   double _angleFor(ArrowDirection direction) {
@@ -170,23 +220,6 @@ class PuzzlePainter extends CustomPainter {
       case ArrowDirection.right:
         return 0;
     }
-  }
-
-  void _drawHeadAt(
-      Canvas canvas, Offset position, double angle, double stroke, Color color) {
-    final len = stroke * 2.7;
-    final halfWidth = stroke * 1.35;
-
-    canvas.save();
-    canvas.translate(position.dx, position.dy);
-    canvas.rotate(angle);
-    final head = Path()
-      ..moveTo(len * 0.58, 0)
-      ..lineTo(-len * 0.42, -halfWidth)
-      ..lineTo(-len * 0.42, halfWidth)
-      ..close();
-    canvas.drawPath(head, Paint()..color = color);
-    canvas.restore();
   }
 
   void _paintDots(Canvas canvas, Size size, double cell) {
@@ -208,6 +241,7 @@ class PuzzlePainter extends CustomPainter {
         oldDelegate.movingPathId != movingPathId ||
         oldDelegate.moveProgress != moveProgress ||
         oldDelegate.activeTrace != activeTrace ||
+        oldDelegate.moveBodyLength != moveBodyLength ||
         oldDelegate.blockedPathId != blockedPathId ||
         oldDelegate.shakeProgress != shakeProgress ||
         oldDelegate.hintPathId != hintPathId ||

@@ -21,17 +21,34 @@ enum PathState { active, moving, removed }
 class PuzzlePath {
   final String id;
   final List<GridPoint> points; // polyline points, at least 2 for shaped path, 1 for straight single-cell legacy
-  final ArrowDirection direction;
+  /// Stored direction; only used when the path has no final segment to
+  /// derive it from (single-point or degenerate paths).
+  final ArrowDirection _declaredDirection;
   PathState state;
   final int colorIndex;
 
   PuzzlePath({
     required this.id,
     required this.points,
-    required this.direction,
+    required ArrowDirection direction,
     this.state = PathState.active,
     this.colorIndex = 0,
-  });
+  }) : _declaredDirection = direction;
+
+  /// Canonical escape direction: the direction the arrowhead visibly points,
+  /// i.e. the final segment (`points.last - points[length - 2]`), exactly as
+  /// `PathGeometry.arrowHead` draws it. Rendering, tap/move, collision and
+  /// the solver all read this, so the arrow always moves where it points.
+  ArrowDirection get direction {
+    if (points.length < 2) return _declaredDirection;
+    final a = points[points.length - 2];
+    final b = points.last;
+    if (a.y == b.y && b.x > a.x) return ArrowDirection.right;
+    if (a.y == b.y && b.x < a.x) return ArrowDirection.left;
+    if (a.x == b.x && b.y > a.y) return ArrowDirection.down;
+    if (a.x == b.x && b.y < a.y) return ArrowDirection.up;
+    return _declaredDirection;
+  }
 
   /// Head is the arrow tip location (last point)
   GridPoint get head => points.isNotEmpty ? points.last : const GridPoint(0, 0);
@@ -89,7 +106,7 @@ class PuzzlePath {
     return PuzzlePath(
       id: id ?? this.id,
       points: points ?? List<GridPoint>.from(this.points),
-      direction: direction ?? this.direction,
+      direction: direction ?? _declaredDirection,
       state: state ?? this.state,
       colorIndex: colorIndex ?? this.colorIndex,
     );

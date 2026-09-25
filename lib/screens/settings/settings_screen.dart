@@ -44,33 +44,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _soundEnabled = sound;
         _isLoading = false;
       });
-      HapticService.initialize(settings);
-      AudioService.instance.initialize(settings: settings);
+      await HapticService.initialize(settings);
+      await AudioService.instance.initialize(settings: settings);
     }
   }
 
   Future<void> _toggleHaptics(bool value) async {
-    final settings = createSettingsService();
-    await settings.init();
-    await settings.setHapticsEnabled(value);
+    await HapticService.setEnabled(value);
     setState(() => _hapticsEnabled = value);
     if (value) HapticService.selectionClick();
-    AudioService.instance.play(GameSound.button);
+    if (_soundEnabled) AudioService.instance.play(GameSound.button);
   }
 
   Future<void> _toggleSound(bool value) async {
-    final settings = createSettingsService();
-    await settings.init();
     await AudioService.instance.setEnabled(value);
     setState(() => _soundEnabled = value);
     if (value) AudioService.instance.play(GameSound.button);
+    if (value && _hapticsEnabled) HapticService.selectionClick();
   }
 
   Future<void> _resetProgress() async {
     final confirm = await _confirmDialog(
       title: 'Reset progress?',
       message:
-          'All completed levels will be cleared and your coins will go back to 50. You will start again from level 1.',
+          'All completed levels will be cleared and your coins will go back to 10. You will start again from level 1.',
       confirmLabel: 'Reset',
     );
     if (confirm && mounted) {
@@ -314,7 +311,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           _ActionTile(
                             icon: Icons.restart_alt_rounded,
                             title: 'Reset progress',
-                            subtitle: 'Back to level 1 · coins reset to 50',
+                            subtitle: 'Back to level 1 · coins reset to 10',
                             danger: true,
                             onTap: _resetProgress,
                           ),

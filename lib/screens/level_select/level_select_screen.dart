@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 
+import '../../core/constants/app_constants.dart';
 import '../../core/theme/app_theme.dart';
+import '../../game/levels/level_world.dart';
 import '../../services/haptics/haptic_service.dart';
 import '../../services/storage/storage_service.dart';
 import '../../widgets/banner_ad_widget.dart';
@@ -17,11 +19,17 @@ class _Band {
 }
 
 const List<_Band> _bands = [
-  _Band('Easy', 1, 10),
-  _Band('Medium', 11, 30),
-  _Band('Hard', 31, 60),
-  _Band('Expert', 61, 120),
-  _Band('Master', 121, 1000),
+  _Band('Basic Shapes', 1, 10),
+  _Band('Patterns', 11, 20),
+  _Band('Nature', 21, 35),
+  _Band('Animals', 36, 55),
+  _Band('Objects', 56, 75),
+  _Band('Landmarks', 76, 95),
+  _Band('Combination', 96, 200),
+  _Band('Advanced Patterns', 201, 400),
+  _Band('Expert', 401, 700),
+  _Band('Master', 701, 900),
+  _Band('Ultimate', 901, 1000),
 ];
 
 class LevelSelectScreen extends StatefulWidget {
@@ -58,8 +66,11 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
 
   void _openLevel(int levelId) {
     HapticService.selectionClick();
-    Navigator.pushNamed(context, '/game', arguments: {'levelNumber': levelId})
-        .then((_) => _loadProgress());
+    Navigator.pushNamed(
+      context,
+      '/game',
+      arguments: {'levelNumber': levelId},
+    ).then((_) => _loadProgress());
   }
 
   @override
@@ -71,53 +82,52 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 20, 8),
-              child: Row(
-                children: [
-                  CircleButton(
-                    icon: Icons.arrow_back_ios_new_rounded,
-                    iconSize: 18,
-                    tooltip: 'Back',
-                    onTap: () => Navigator.pop(context),
-                  ),
-                  const Expanded(
-                    child: Center(
-                      child: Text(
-                        'Levels',
-                        style: TextStyle(
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          color: AppTheme.ink,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const CoinChip(),
-                ],
-              )
-                  .animate()
-                  .fadeIn(duration: 300.ms)
-                  .slideY(begin: -0.3, end: 0, curve: Curves.easeOut),
+              child:
+                  Row(
+                        children: [
+                          CircleButton(
+                            icon: Icons.arrow_back_ios_new_rounded,
+                            iconSize: 18,
+                            tooltip: 'Back',
+                            onTap: () => Navigator.pop(context),
+                          ),
+                          const Expanded(
+                            child: Center(
+                              child: Text(
+                                'Levels',
+                                style: TextStyle(
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.ink,
+                                ),
+                              ),
+                            ),
+                          ),
+                          const CoinChip(),
+                        ],
+                      )
+                      .animate()
+                      .fadeIn(duration: 300.ms)
+                      .slideY(begin: -0.3, end: 0, curve: Curves.easeOut),
             ),
             Expanded(
               child: _isLoading
                   ? const Center(
-                      child: CircularProgressIndicator(strokeWidth: 2))
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
                   : LayoutBuilder(
                       builder: (context, constraints) {
                         final width = constraints.maxWidth;
                         final columns = width >= 620
                             ? 7
                             : width >= 480
-                                ? 5
-                                : 4;
+                            ? 5
+                            : 4;
                         return ListView.builder(
                           padding: const EdgeInsets.only(bottom: 12),
                           itemCount: _bands.length,
-                          itemBuilder: (context, index) => _buildSection(
-                            _bands[index],
-                            index,
-                            columns,
-                          ),
+                          itemBuilder: (context, index) =>
+                              _buildSection(_bands[index], index, columns),
                         );
                       },
                     ),
@@ -137,67 +147,71 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                band.title,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: AppTheme.ink,
-                ),
-              ),
-              const SizedBox(width: 9),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: AppTheme.chipFill,
-                  borderRadius: BorderRadius.circular(9),
-                ),
-                child: Text(
-                  '$done/$count',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    color: AppTheme.subtleText,
+      child:
+          Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Text(
+                        band.title,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.ink,
+                        ),
+                      ),
+                      const SizedBox(width: 9),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 3,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.chipFill,
+                          borderRadius: BorderRadius.circular(9),
+                        ),
+                        child: Text(
+                          '$done/$count',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.subtleText,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            padding: EdgeInsets.zero,
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              crossAxisSpacing: 10,
-              mainAxisSpacing: 10,
-              childAspectRatio: 1,
-            ),
-            itemCount: count,
-            itemBuilder: (context, i) =>
-                _buildTile(band.start + i, index, i, columns),
-          ),
-        ],
-      )
-          .animate(delay: (40 * index).ms)
-          .fadeIn(duration: 350.ms)
-          .slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
+                  const SizedBox(height: 12),
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    padding: EdgeInsets.zero,
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: columns,
+                      crossAxisSpacing: 10,
+                      mainAxisSpacing: 10,
+                      childAspectRatio: 1,
+                    ),
+                    itemCount: count,
+                    itemBuilder: (context, i) =>
+                        _buildTile(band.start + i, index, i, columns),
+                  ),
+                ],
+              )
+              .animate(delay: (40 * index).ms)
+              .fadeIn(duration: 350.ms)
+              .slideY(begin: 0.04, end: 0, curve: Curves.easeOutCubic),
     );
   }
 
   Widget _buildTile(int levelId, int bandIndex, int itemIndex, int columns) {
-    final isUnlocked = levelId <= _unlockedLevel;
+    final isUnlocked =
+        AppConstants.unlockAllLevels || levelId <= _unlockedLevel;
     final isCompleted = _completedLevels.contains(levelId);
     final isCurrent = levelId == _unlockedLevel && !isCompleted;
 
-    final delayMs =
-        bandIndex == 0 ? (itemIndex % columns) * 35 + 80 : 0;
+    final delayMs = bandIndex == 0 ? (itemIndex % columns) * 35 + 80 : 0;
 
     final tile = _buildTileContent(levelId, isUnlocked, isCompleted, isCurrent);
 
@@ -214,7 +228,11 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
   }
 
   Widget _buildTileContent(
-      int levelId, bool isUnlocked, bool isCompleted, bool isCurrent) {
+    int levelId,
+    bool isUnlocked,
+    bool isCompleted,
+    bool isCurrent,
+  ) {
     final Color fill;
     final Color numberColor;
 
@@ -240,13 +258,36 @@ class _LevelSelectScreenState extends State<LevelSelectScreen> {
           children: [
             Center(
               child: isUnlocked
-                  ? Text(
-                      '$levelId',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        color: numberColor,
-                      ),
+                  ? Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          '$levelId',
+                          style: TextStyle(
+                            fontSize: isCurrent ? 15 : 16,
+                            fontWeight: FontWeight.w800,
+                            color: numberColor,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                          child: Text(
+                            LevelWorlds.shapeFor(levelId),
+                            textAlign: TextAlign.center,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 7.5,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                              color: isCurrent
+                                  ? Colors.white.withValues(alpha: 0.92)
+                                  : AppTheme.subtleText.withValues(alpha: 0.95),
+                            ),
+                          ),
+                        ),
+                      ],
                     )
                   : Icon(
                       Icons.lock_rounded,
