@@ -192,11 +192,15 @@ class PathGeometry {
   ///   normal length `(3.0×stroke)∈[6,10]`, normal width `(2.6×stroke)∈[5,9]`,
   ///   scaled down to a 0.45 floor so the head never vanishes or overlaps
   ///   the corner. Logical paths are never modified.
+  /// - When [cell] is given, the head is also capped relative to the cell
+  ///   (length <= 0.55 cell, width <= 0.5 cell) so it stays inside its own
+  ///   lane on dense boards. On regular boards the caps never bind.
   static ArrowHead arrowHead({
     required List<Offset> vertices,
     required double stroke,
     required double cornerRadius,
     required double fallbackAngle,
+    double? cell,
   }) {
     Offset tip;
     Offset dir;
@@ -225,8 +229,12 @@ class PathGeometry {
       dir = Offset(math.cos(fallbackAngle), math.sin(fallbackAngle));
     }
 
-    final normalLen = (stroke * 3.0).clamp(6.0, 10.0).toDouble();
-    final normalWidth = (stroke * 2.6).clamp(5.0, 9.0).toDouble();
+    var normalLen = (stroke * 3.0).clamp(6.0, 10.0).toDouble();
+    var normalWidth = (stroke * 2.6).clamp(5.0, 9.0).toDouble();
+    if (cell != null) {
+      normalLen = math.min(normalLen, math.max(3.5, cell * 0.55));
+      normalWidth = math.min(normalWidth, math.max(3.0, cell * 0.5));
+    }
     final reserve = math.min(cornerRadius, available * 0.3);
     final usable = available - reserve - stroke * 0.5;
     double scale = 1.0;

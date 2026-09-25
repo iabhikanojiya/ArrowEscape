@@ -202,7 +202,7 @@ class Level {
   }
 
   bool get isValid {
-    if (gridSize < 3 || gridSize > 30) return false;
+    if (gridSize < 3 || gridSize > 48) return false;
     final effectiveCount = puzzlePaths.isNotEmpty
         ? puzzlePaths.length
         : arrows.length;

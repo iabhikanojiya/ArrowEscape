@@ -72,7 +72,7 @@ class LevelWorlds {
     ],
   );
 
-  // W3: Nature - one dense silhouette per level, boards grow 20 -> 21
+  // W3: Nature - one dense silhouette per level, boards ~24-26
   static const WorldInfo world3 = WorldInfo(
     world: 3,
     title: 'Nature',
@@ -99,7 +99,7 @@ class LevelWorlds {
     ],
   );
 
-  // W4: Animals - one dense silhouette per level, boards ~21-22
+  // W4: Animals - one dense silhouette per level, boards ~26-28
   static const WorldInfo world4 = WorldInfo(
     world: 4,
     title: 'Animals',
@@ -131,7 +131,7 @@ class LevelWorlds {
     ],
   );
 
-  // W5: Objects - one dense silhouette per level, boards ~22
+  // W5: Objects - one dense silhouette per level, boards ~27-28
   static const WorldInfo world5 = WorldInfo(
     world: 5,
     title: 'Objects',
@@ -163,7 +163,7 @@ class LevelWorlds {
     ],
   );
 
-  // W6: Buildings / Landmarks - one dense silhouette per level, boards ~23
+  // W6: Buildings / Landmarks - one dense silhouette per level, ~28-29
   static const WorldInfo world6 = WorldInfo(
     world: 6,
     title: 'Landmarks',
@@ -195,7 +195,7 @@ class LevelWorlds {
     ],
   );
 
-  // W7: Combination Levels (96-200) - two staggered silhouettes, 26x26+.
+  // W7: Combination Levels (96-200) - two staggered silhouettes, ~29-32.
   // Display names cycle here for documentation; runtime labels and masks
   // come from ExtendedTemplates so combos stay in sync.
   static const WorldInfo world7 = WorldInfo(
@@ -215,7 +215,7 @@ class LevelWorlds {
     ],
   );
 
-  // W8: Advanced Patterns (201-400) - one dense pattern, boards 24 -> 26.
+  // W8: Advanced Patterns (201-400) - one dense pattern, boards ~32-35.
   static const WorldInfo world8 = WorldInfo(
     world: 8,
     title: 'Advanced Patterns',
@@ -239,7 +239,7 @@ class LevelWorlds {
     ],
   );
 
-  // W9: Expert Combinations (401-700) - two staggered silhouettes, ~27x27.
+  // W9: Expert Combinations (401-700) - two staggered silhouettes, ~35-39.
   static const WorldInfo world9 = WorldInfo(
     world: 9,
     title: 'Expert',
@@ -257,7 +257,7 @@ class LevelWorlds {
     ],
   );
 
-  // W10: Master Challenges (701-900) - two staggered silhouettes, ~29x29.
+  // W10: Master Challenges (701-900) - two staggered silhouettes, ~39-41.
   static const WorldInfo world10 = WorldInfo(
     world: 10,
     title: 'Master',
@@ -273,7 +273,7 @@ class LevelWorlds {
     ],
   );
 
-  // W11: Ultimate Challenges (901-1000) - two staggered silhouettes, 30x30.
+  // W11: Ultimate Challenges (901-1000) - two staggered silhouettes, 41-42.
   static const WorldInfo world11 = WorldInfo(
     world: 11,
     title: 'Ultimate',
@@ -324,17 +324,15 @@ class LevelWorlds {
   static String worldNameFor(int levelId) => worldFor(levelId).title;
 
   /// Board size for [levelId]. Levels 1-20 are the curated 20x20 boards.
-  /// From Level 21 shapes grow continuously: single-shape boards 20 -> 30
-  /// (fast early, then steady), combination boards 26 -> 30 (each shape
-  /// 17 -> 20 cells across).
+  /// From Level 21 boards grow continuously from 24x24 to 42x42 (fast
+  /// early, then steady), giving finer, denser arrow constructions;
+  /// combination levels start at 28 so both shapes stay large.
   static int gridSizeFor(int levelId) {
     if (levelId <= 20) return worldFor(levelId).gridSize;
-    if (extendedComponents(levelId).length >= 2) {
-      final t = ((levelId - 96) / (1000 - 96)).clamp(0.0, 1.0);
-      return 26 + (4 * t).round();
-    }
     final t = ((levelId - 21) / (1000 - 21)).clamp(0.0, 1.0);
-    return 20 + (10 * math.sqrt(t)).round();
+    final size = 24 + (18 * math.sqrt(t)).round();
+    if (extendedComponents(levelId).length >= 2) return math.max(28, size);
+    return size;
   }
 
   static int difficultyFor(int levelId) {

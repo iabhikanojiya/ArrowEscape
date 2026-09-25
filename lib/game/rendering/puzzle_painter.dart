@@ -159,6 +159,7 @@ class PuzzlePainter extends CustomPainter {
         stroke: stroke,
         cornerRadius: PathGeometry.cornerRadiusFor(cell),
         fallbackAngle: _angleFor(path.direction),
+        cell: cell,
       );
       final wings = Path()
         ..moveTo(head.tip.dx, head.tip.dy)
@@ -198,6 +199,7 @@ class PuzzlePainter extends CustomPainter {
       stroke: stroke,
       cornerRadius: PathGeometry.cornerRadiusFor(cell),
       fallbackAngle: math.atan2(tangent.vector.dy, tangent.vector.dx),
+      cell: cell,
     );
     canvas.drawPath(
       Path()

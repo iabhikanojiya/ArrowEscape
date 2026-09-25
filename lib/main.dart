@@ -16,6 +16,7 @@ import 'screens/game/game_screen.dart';
 import 'screens/how_to_play/how_to_play_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'services/admob_service.dart';
+import 'services/app_update_service.dart';
 import 'services/audio/audio_service.dart';
 import 'services/economy/economy_service.dart';
 import 'services/haptics/haptic_service.dart';
@@ -44,6 +45,8 @@ Future<void> main() async {
       .initialize(settings: settings)
       .catchError((_) {}));
   unawaited(_initAds());
+  // Google Play in-app update check (once per launch, after startup).
+  AppUpdateService.instance.start();
 }
 
 Future<void> _initFirebase() async {
@@ -91,6 +94,7 @@ class ArrowEscapeApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final analytics = _analyticsForObserver();
     return MaterialApp(
+      navigatorKey: AppUpdateService.navigatorKey,
       title: AppConstants.appName,
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,

@@ -3,10 +3,10 @@ import 'dart:math' as math;
 import '../../models/arrow.dart';
 import '../../models/level.dart';
 import '../../models/puzzle_path.dart';
-import '../solver/puzzle_solver.dart';
 import 'curated_levels.dart';
 import 'dense_tiler.dart';
 import 'extended_templates.dart';
+import 'level_quality.dart';
 import 'level_world.dart';
 
 /// Shape-driven level generator.
@@ -45,21 +45,24 @@ class ShapeLevelGenerator {
     return _generateExtended(levelId);
   }
 
-  /// Puzzle settings for [levelId] (21-1000), rising continuously: longer
-  /// and more bent arrows, deeper dependency chains, fewer free opening
-  /// moves. The board itself grows via [LevelWorlds.gridSizeFor].
+  /// Puzzle settings for [levelId] (21-1000), rising continuously: a
+  /// mix of short, medium and long arrows that gets longer and more bent,
+  /// deeper dependency chains, fewer free opening moves. The board itself
+  /// grows via [LevelWorlds.gridSizeFor].
   static TilerParams paramsFor(int levelId) {
     final t = ((levelId - 21) / (1000 - 21)).clamp(0.0, 1.0);
     final d = math.pow(t, 0.7).toDouble();
     return TilerParams(
-      meanSize: 3.9 + 1.3 * d,
-      longChance: 0.05 + 0.2 * d,
-      maxSize: (8 + 6 * d).round(),
+      shortChance: 0.25 - 0.1 * d,
+      longChance: 0.1 + 0.25 * d,
+      mediumMean: 4.5 + 2.5 * d,
+      longMin: (7 + 3 * d).round(),
+      maxSize: (10 + 14 * d).round(),
       bendWeight: 16 + 20 * d,
+      turnChance: 0.5 + 0.3 * d,
       depthWeight: 4 + 14 * d,
       freePenalty: 80 + 170 * d,
       freeLengthBonus: 6 * d,
-      turnChance: 0.5 + 0.3 * d,
       blockedBias: 0.3 + 0.6 * d,
     );
   }
@@ -67,7 +70,12 @@ class ShapeLevelGenerator {
   static Level _generateExtended(int levelId) {
     final world = LevelWorlds.worldFor(levelId);
     final grid = LevelWorlds.gridSizeFor(levelId);
-    final mask = ExtendedTemplates.buildMask(levelId, grid);
+    // All arrows share one colour, so the whole silhouette is one region
+    // (arrows may run across the design's parts).
+    final regions = {
+      for (final c in ExtendedTemplates.buildMask(levelId, grid)) c: 0,
+    };
+    final target = regions.keys.toSet();
     final params = paramsFor(levelId);
 
     Level? best;
@@ -80,20 +88,24 @@ class ShapeLevelGenerator {
         attempt < candidates + 4 && accepted < candidates;
         attempt++) {
       final seed = (levelId * 2654435761 + attempt * 7919) & 0x7FFFFFFF;
-      final paths = DenseTiler.tile(mask, grid,
+      final paths = DenseTiler.tile(regions, grid,
           seed: seed, params: params, attemptsPerPiece: attemptsPerPiece);
       candidatesTested++;
       final level = _withMeta(levelId, world, grid, paths);
-      // Validate with the solver before accepting.
-      final res = PuzzleSolver.solve(level);
-      if (!res.solvable || res.solutionDepth != paths.length) {
+      // Validate (solver, silhouette coverage, noise) before accepting.
+      final q = LevelQuality.measure(level, target);
+      if (!q.solvable) {
         rejectedUnsolvable++;
         continue;
       }
-      accepted++;
-      final singles = paths.where((p) => p.points.length == 1).length;
-      final depth = PuzzleSolver.dependencyDepth(level);
-      final key = [singles, -depth, res.initialMoves / paths.length];
+      if (!q.acceptable) {
+        rejectedShape++;
+        if (best != null) continue;
+      } else {
+        accepted++;
+      }
+      // Prefer acceptable, then deeper chains, then fewer free openings.
+      final key = [q.acceptable ? 0 : 1, -q.depth, q.freeRatio];
       if (bestKey == null || _less(key, bestKey)) {
         bestKey = key;
         best = level;

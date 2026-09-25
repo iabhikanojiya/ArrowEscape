@@ -177,4 +177,28 @@ void main() {
       expect(tangentDirs, {'right', 'left', 'down', 'up'});
     });
   });
+
+  group('dense boards', () {
+    const vertices = [Offset(0, 0), Offset(40, 0)];
+    ArrowHead headFor(double cell) => PathGeometry.arrowHead(
+          vertices: vertices,
+          stroke: 2.6,
+          cornerRadius: 2,
+          fallbackAngle: 0,
+          cell: cell,
+        );
+
+    test('head shrinks to fit a small cell (42x42 board)', () {
+      final h = headFor(8.6);
+      expect(h.length, closeTo(8.6 * 0.55, 1e-9));
+      expect(h.width, closeTo(8.6 * 0.5, 1e-9));
+      expect(h.width, lessThan(8.6)); // stays inside its own lane
+    });
+
+    test('regular cells keep the standard head (Levels 1-20 size)', () {
+      final h = headFor(18);
+      expect(h.length, closeTo(2.6 * 3.0, 1e-9));
+      expect(h.width, closeTo(2.6 * 2.6, 1e-9));
+    });
+  });
 }
