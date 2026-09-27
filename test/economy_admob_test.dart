@@ -71,9 +71,13 @@ Future<void> _pumpGameWithLevel(
   await tester.pumpAndSettle();
 }
 
+// First-time "blocked" tip already seen (covered in blocked_tip_test), so
+// these lives/economy flows aren't interrupted by it.
+const Map<String, Object> _prefs = {'tip_blocked_arrow_seen': true};
+
 void main() {
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    SharedPreferences.setMockInitialValues(_prefs);
     EconomyProvider.setInstance(createEconomyService(useInMemory: true));
     await EconomyProvider.instance.init();
     AdmobService.debugShowRewardedHandler = null;
@@ -87,7 +91,7 @@ void main() {
 
   group('Lives', () {
     testWidgets('new level starts at 3 lives', (tester) async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues(_prefs);
       await _pumpGameWithLevel(tester, _blockedLevel(), 1);
       expect(_livesOf(tester), 3);
     });
@@ -249,7 +253,7 @@ void main() {
 
   group('Coins', () {
     testWidgets('level completion awards exactly +3 coins once', (tester) async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues(_prefs);
       EconomyProvider.setInstance(createEconomyService(useInMemory: true));
       await EconomyProvider.instance.init();
       await EconomyProvider.instance.setCoins(20);
@@ -282,7 +286,7 @@ void main() {
     });
 
     testWidgets('coins persist after restart', (tester) async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues(_prefs);
       EconomyProvider.setInstance(createEconomyService(useInMemory: true));
       await EconomyProvider.instance.init();
       await EconomyProvider.instance.setCoins(10);
@@ -406,21 +410,21 @@ void main() {
 
   group('Banners', () {
     testWidgets('banner appears on Home', (tester) async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues(_prefs);
       await tester.pumpWidget(const MaterialApp(home: HomeScreen()));
       await tester.pumpAndSettle();
       expect(find.byType(BannerAdWidget), findsOneWidget);
     });
 
     testWidgets('banner appears on Level Selection', (tester) async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues(_prefs);
       await tester.pumpWidget(const MaterialApp(home: LevelSelectScreen()));
       await tester.pumpAndSettle();
       expect(find.byType(BannerAdWidget), findsOneWidget);
     });
 
     testWidgets('banner appears on Settings', (tester) async {
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues(_prefs);
       await tester.pumpWidget(const MaterialApp(home: SettingsScreen()));
       await tester.pumpAndSettle();
       expect(find.byType(BannerAdWidget), findsOneWidget);
@@ -443,7 +447,7 @@ void main() {
       await EconomyProvider.instance.init();
       await EconomyProvider.instance.setCoins(20);
 
-      SharedPreferences.setMockInitialValues({});
+      SharedPreferences.setMockInitialValues(_prefs);
       await tester.pumpWidget(const MaterialApp(home: SettingsScreen()));
       await tester.pumpAndSettle();
 

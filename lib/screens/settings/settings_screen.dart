@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../models/reward_purpose.dart';
@@ -322,7 +324,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           const _InfoTile(
                               label: 'Game', value: 'Arrow Escape'),
                           _divider(),
-                          const _InfoTile(label: 'Version', value: '1.0.0'),
+                          const _VersionTile(),
                         ], 4),
                         const SizedBox(height: 36),
                         Center(
@@ -534,6 +536,59 @@ class _ActionTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Shows the app version exactly as written in pubspec.yaml
+/// (`version: 1.0.2+4`). pubspec.yaml is bundled as an asset, so the value
+/// follows every change to it (on any rebuild or hot restart); the
+/// installed app's version is the fallback.
+class _VersionTile extends StatefulWidget {
+  const _VersionTile();
+
+  @override
+  State<_VersionTile> createState() => _VersionTileState();
+}
+
+class _VersionTileState extends State<_VersionTile> {
+  String _version = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    var version = await _fromPubspec();
+    if (version.isEmpty) version = await _fromInstalledApp();
+    if (mounted) setState(() => _version = version.isEmpty ? '–' : version);
+  }
+
+  static Future<String> _fromPubspec() async {
+    try {
+      final text = await rootBundle.loadString('pubspec.yaml');
+      final match =
+          RegExp(r'^version:\s*([^\s#]+)', multiLine: true).firstMatch(text);
+      return match?.group(1) ?? '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  static Future<String> _fromInstalledApp() async {
+    try {
+      final info = await PackageInfo.fromPlatform();
+      return info.buildNumber.isEmpty
+          ? info.version
+          : '${info.version}+${info.buildNumber}';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) =>
+      _InfoTile(label: 'Version', value: _version);
 }
 
 class _InfoTile extends StatelessWidget {

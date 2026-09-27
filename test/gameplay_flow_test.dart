@@ -56,7 +56,8 @@ Offset _cellCenter(WidgetTester tester, int x, int y) {
 
 void main() {
   setUp(() async {
-    SharedPreferences.setMockInitialValues({});
+    // First-time "blocked" tip already seen (covered in blocked_tip_test).
+    SharedPreferences.setMockInitialValues({'tip_blocked_arrow_seen': true});
   });
 
   testWidgets('free path exits fully, blocked path flashes and stays',

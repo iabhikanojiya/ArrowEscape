@@ -67,31 +67,38 @@ class HowToPlayScreen extends StatelessWidget {
                   const SizedBox(height: 22),
                   _Step(
                     index: 0,
-                    title: 'Spot the paths',
+                    title: 'Spot the arrows',
                     description:
-                        'Each line with an arrowhead is one arrow. Bent lines are a single arrow too - corners included.',
-                    variant: 0,
+                        'Each line with an arrowhead is one arrow. Bent lines are a single arrow too, corners included.',
+                    variant: HowToPlayDemo.spot,
                   ),
                   _Step(
                     index: 1,
-                    title: 'Tap to escape',
+                    title: 'The arrowhead shows the way',
                     description:
-                        'With a clear runway the track lights up blue and is pulled away toward the exit, corner by corner.',
-                    variant: 1,
+                        'An arrow can only leave in the direction its arrowhead points. The whole arrow slides out that way, bends and all.',
+                    variant: HowToPlayDemo.direction,
                   ),
                   _Step(
                     index: 2,
-                    title: 'Blocked? No luck yet',
+                    title: 'Tap a free arrow',
                     description:
-                        'If another arrow blocks the exit the whole path flashes red and shakes. Clear the blocker first.',
-                    variant: 2,
+                        'If nothing is in its way, the arrow escapes off the board.',
+                    variant: HowToPlayDemo.escape,
                   ),
                   _Step(
                     index: 3,
+                    title: 'Blocked costs a heart',
+                    description:
+                        'If any other arrow is in its way, it flashes red, stays put and you lose a heart. Free the arrow in front first.',
+                    variant: HowToPlayDemo.blocked,
+                  ),
+                  _Step(
+                    index: 4,
                     title: 'Clear the board',
                     description:
                         'Free every arrow to complete the level, earn coins and unlock the next challenge.',
-                    variant: 3,
+                    variant: HowToPlayDemo.clear,
                   ),
                   const SizedBox(height: 20),
                   Container(
@@ -107,7 +114,7 @@ class HowToPlayScreen extends StatelessWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Stuck? Use a Hint to highlight a safe move, or Undo to take a step back.',
+                            'Look for arrows whose arrowhead points out of the shape with nothing in front. Stuck? Use a Hint to highlight a safe move, or Undo to take a step back.',
                             style: TextStyle(
                               fontSize: 12.5,
                               height: 1.45,
@@ -190,7 +197,7 @@ class _Step extends StatelessWidget {
             ),
             child: Padding(
               padding: const EdgeInsets.all(9),
-              child: CustomPaint(painter: _DemoPainter(variant)),
+              child: HowToPlayDemo(variant: variant),
             ),
           ),
           const SizedBox(width: 16),
@@ -238,6 +245,24 @@ class _Step extends StatelessWidget {
   }
 }
 
+/// Small illustration of one gameplay rule (used by How to Play and the
+/// first-time "blocked" tip).
+class HowToPlayDemo extends StatelessWidget {
+  static const int spot = 0;
+  static const int escape = 1;
+  static const int blocked = 2;
+  static const int clear = 3;
+  static const int direction = 4;
+
+  final int variant;
+
+  const HowToPlayDemo({super.key, required this.variant});
+
+  @override
+  Widget build(BuildContext context) =>
+      CustomPaint(painter: _DemoPainter(variant), size: Size.infinite);
+}
+
 class _DemoPainter extends CustomPainter {
   final int variant;
 
@@ -264,12 +289,35 @@ class _DemoPainter extends CustomPainter {
         _drawTracingSnapshot(canvas, cell, stroke);
         break;
       case 2:
+        // The red arrow points right, but another arrow sits in its way.
+        _drawStatic(canvas, cell, stroke,
+            const [GridPoint(4, 0), GridPoint(4, 3)],
+            ArrowDirection.down, PuzzlePalette.ink);
         canvas.save();
         canvas.translate(2, 0);
         _drawStatic(canvas, cell, stroke,
-            const [GridPoint(0, 2), GridPoint(2, 2), GridPoint(2, 4)],
+            const [GridPoint(0, 4), GridPoint(0, 2), GridPoint(2, 2)],
             ArrowDirection.right, PuzzlePalette.blocked);
         canvas.restore();
+        break;
+      case 4:
+        // Bent arrow pointing up: the whole body slides straight up.
+        final lane = Paint()
+          ..color = AppTheme.accent.withValues(alpha: 0.35)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = stroke * 0.45
+          ..strokeCap = StrokeCap.round;
+        for (final col in const [(1, 3), (2, 3), (3, 1)]) {
+          final x = cell * col.$1 + cell / 2;
+          for (double y = cell * col.$2; y > cell * 0.3; y -= cell * 0.5) {
+            canvas.drawLine(
+                Offset(x, y), Offset(x, math.max(0, y - cell * 0.25)), lane);
+          }
+        }
+        _drawStatic(canvas, cell, stroke,
+            const [GridPoint(1, 4), GridPoint(1, 3), GridPoint(3, 3),
+              GridPoint(3, 1)],
+            ArrowDirection.up, PuzzlePalette.ink);
         break;
       case 3:
         _drawStatic(canvas, cell, stroke,

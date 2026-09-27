@@ -20,8 +20,10 @@ import '../../services/haptics/haptic_service.dart';
 import '../../services/hints/hint_service.dart';
 import '../../services/storage/storage_service.dart';
 import '../../services/analytics_service.dart';
+import '../../services/tips_service.dart';
 import '../../widgets/ad_unavailable_dialog.dart';
 import '../../widgets/banner_ad_widget.dart';
+import '../../widgets/blocked_tip_dialog.dart';
 import '../../widgets/insufficient_coins_dialog.dart';
 import '../../widgets/lives_display.dart';
 import '../../widgets/out_of_lives_dialog.dart';
@@ -50,6 +52,7 @@ class _GameScreenState extends State<GameScreen> {
   bool _isShowingCompletion = false;
   bool _isShowingOutOfLives = false;
   Timer? _outOfLivesTimer;
+  bool _blockedTipChecked = false;
   int _lives = 3;
   bool _completionRewardGranted = false;
   int _lastRewardCoins = 0;
@@ -156,6 +159,7 @@ class _GameScreenState extends State<GameScreen> {
     AnalyticsService.logCrashlytics(
       'arrow_blocked level=${widget.levelNumber} life_lost lives=$_lives',
     );
+    if (_lives > 0) _maybeShowBlockedTip();
     if (_lives <= 0) {
       _lives = 0;
       AnalyticsService.logOutOfLives(widget.levelNumber);
@@ -168,6 +172,29 @@ class _GameScreenState extends State<GameScreen> {
         _showOutOfLivesDialog();
       });
     }
+  }
+
+  /// First blocked tap ever (per install): explain how arrows escape.
+  Future<void> _maybeShowBlockedTip() async {
+    if (_blockedTipChecked) return;
+    _blockedTipChecked = true;
+    if (!await TipsService.shouldShowBlockedTip()) return;
+    // Let the red flash and shake play first.
+    await Future<void>.delayed(const Duration(milliseconds: 450));
+    if (!mounted ||
+        _isShowingOutOfLives ||
+        _isShowingCompletion ||
+        _game.isLevelComplete) {
+      _blockedTipChecked = false; // try again on a later blocked tap
+      return;
+    }
+    await TipsService.markBlockedTipShown();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.white.withValues(alpha: 0.88),
+      builder: (_) => const BlockedTipDialog(),
+    );
   }
 
   void _showOutOfLivesDialog() {

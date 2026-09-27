@@ -26,9 +26,11 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byType(HowToPlayScreen), findsOneWidget);
-    expect(find.text('Spot the paths'), findsOneWidget);
-    expect(find.text('Tap to escape'), findsOneWidget);
-    expect(find.text('Blocked? No luck yet'), findsOneWidget);
+    expect(find.text('Spot the arrows'), findsOneWidget);
+    expect(find.text('The arrowhead shows the way'), findsOneWidget);
+    expect(find.text('Tap a free arrow'), findsOneWidget);
+    await tester.scrollUntilVisible(find.text('Clear the board'), 200);
+    expect(find.text('Blocked costs a heart'), findsOneWidget);
     expect(find.text('Clear the board'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
