@@ -3,6 +3,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../core/theme/app_theme.dart';
 import '../services/admob_service.dart';
+import '../services/consent_service.dart';
 
 class BannerAdWidget extends StatefulWidget {
   const BannerAdWidget({super.key});
@@ -18,6 +19,19 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
   @override
   void initState() {
     super.initState();
+    final consent = ConsentService.instance;
+    if (consent.canRequestAds) {
+      _loadAd();
+    } else {
+      // Waits for the UMP consent flow; loads as soon as ads are allowed.
+      consent.canRequestAdsListenable.addListener(_onConsentChanged);
+    }
+  }
+
+  void _onConsentChanged() {
+    final consent = ConsentService.instance;
+    if (!consent.canRequestAds || !mounted) return;
+    consent.canRequestAdsListenable.removeListener(_onConsentChanged);
     _loadAd();
   }
 
@@ -56,6 +70,8 @@ class _BannerAdWidgetState extends State<BannerAdWidget> {
 
   @override
   void dispose() {
+    ConsentService.instance.canRequestAdsListenable
+        .removeListener(_onConsentChanged);
     _bannerAd?.dispose();
     super.dispose();
   }

@@ -8,8 +8,10 @@ import '../../models/reward_purpose.dart';
 import '../../services/admob_service.dart';
 import '../../services/analytics_service.dart';
 import '../../services/audio/audio_service.dart';
+import '../../services/consent_service.dart';
 import '../../services/economy/economy_service.dart';
 import '../../services/haptics/haptic_service.dart';
+import '../../services/play_games_service.dart';
 import '../../services/settings/settings_service.dart';
 import '../../services/storage/storage_service.dart';
 import '../../widgets/banner_ad_widget.dart';
@@ -63,6 +65,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _soundEnabled = value);
     if (value) AudioService.instance.play(GameSound.button);
     if (value && _hapticsEnabled) HapticService.selectionClick();
+  }
+
+  Future<void> _openLeaderboard() async {
+    HapticService.lightImpact();
+    AudioService.instance.play(GameSound.button);
+    final opened = await PlayGamesService.instance.showLeaderboards();
+    if (opened || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+            'Google Play Games isn\'t available right now. Please try again.'),
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
+  Future<void> _openPrivacyOptions() async {
+    HapticService.lightImpact();
+    AudioService.instance.play(GameSound.button);
+    final shown = await ConsentService.instance.showPrivacyOptionsForm();
+    if (shown || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      _snackbar('Privacy options aren\'t available right now. Please try again.'),
+    );
   }
 
   Future<void> _resetProgress() async {
@@ -243,6 +271,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               Navigator.pushNamed(context, '/how_to_play');
                             },
                           ),
+                          _divider(),
+                          _ActionTile(
+                            icon: Icons.leaderboard_rounded,
+                            title: 'Leaderboard',
+                            subtitle: 'Google Play Games · Coins Earned',
+                            danger: false,
+                            onTap: _openLeaderboard,
+                          ),
                         ], 1),
                         const SizedBox(height: 26),
                         _sectionLabel('Earn Coins', 2),
@@ -310,6 +346,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         const SizedBox(height: 26),
                         _sectionLabel('Data', 3),
                         _group([
+                          // Required by Google UMP where consent applies
+                          // (EEA/UK/CH); hidden everywhere else.
+                          ValueListenableBuilder<bool>(
+                            valueListenable: ConsentService
+                                .instance.privacyOptionsRequiredListenable,
+                            builder: (context, required, _) => required
+                                ? Column(
+                                    children: [
+                                      _ActionTile(
+                                        icon: Icons.privacy_tip_rounded,
+                                        title: 'Privacy & ad choices',
+                                        subtitle: 'Review or change ad consent',
+                                        danger: false,
+                                        onTap: _openPrivacyOptions,
+                                      ),
+                                      _divider(),
+                                    ],
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
                           _ActionTile(
                             icon: Icons.restart_alt_rounded,
                             title: 'Reset progress',

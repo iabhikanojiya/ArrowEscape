@@ -2,7 +2,7 @@ class AppConstants {
   static const String appName = 'Arrow Escape';
   static const String tagline = 'A relaxing arrow logic puzzle';
   
-  static const int maxLevels = 1000;
+  static const int maxLevels = 2000;
   static const int initialUnlockedLevel = 1;
 
   /// TEMPORARY (UI review): shows every level as unlocked in level select.

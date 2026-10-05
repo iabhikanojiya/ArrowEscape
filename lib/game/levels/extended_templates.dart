@@ -1,9 +1,13 @@
 import '../../models/puzzle_path.dart';
+import 'expansion_catalog.dart';
+import 'expansion_shapes.dart';
 import 'level_world.dart';
 import 'shape_art.dart';
 import 'shape_masks.dart';
 
-/// Mask composition for Levels 21-1000 (Levels 1-20 are curated and untouched).
+/// Mask composition for Levels 21-2000 (Levels 1-20 are curated and untouched).
+/// Levels 1001-2000 take a separate path ([ExpansionCatalog]) so Levels
+/// 21-1000 keep exactly their original masks.
 ///
 /// Template *selection* (components, layout, display name) lives in
 /// [LevelWorlds] so metadata and tile labels share one source of truth.
@@ -55,6 +59,7 @@ class ExtendedTemplates {
   /// composition; the first shape keeps a one-cell gap from the second.
   /// The first shape is primary with accent details, the second secondary.
   static Map<GridPoint, int> buildRegions(int levelId, int grid) {
+    if (ExpansionCatalog.covers(levelId)) return _buildExpansion(levelId, grid);
     final t = templateFor(levelId);
     const margin = 1;
     final passes = thickeningFor(grid);
@@ -80,6 +85,106 @@ class ExtendedTemplates {
         second.containsKey(GridPoint(p.x, p.y - 1));
     first.removeWhere((p, _) => nearSecond(p));
     return _thicken({...first, ...second}, grid, passes);
+  }
+
+  /// Expansion board (Levels 1001-2000): each [ExpansionPiece] is drawn in
+  /// its box (mirrored / turned / nested as planned). The first piece is
+  /// the main shape; each later piece gives up any cell touching an earlier
+  /// one, so every shape stays separated by at least one empty cell.
+  static Map<GridPoint, int> _buildExpansion(int levelId, int grid) {
+    const margin = 1;
+    final inner = grid - 2 * margin;
+    final out = <GridPoint, int>{};
+    final pieces = ExpansionCatalog.piecesFor(levelId);
+    for (int k = 0; k < pieces.length; k++) {
+      final pc = pieces[k];
+      final size = (pc.size * inner).round().clamp(4, inner);
+      final ox = margin + (pc.x * inner).round().clamp(0, inner - size);
+      final oy = margin + (pc.y * inner).round().clamp(0, inner - size);
+      final base = _expansionArt(pc.name, size);
+      var art = base;
+      for (final s in pc.rings) {
+        art = _cutRing(art, base, s);
+      }
+      art = _orient(art, size, pc.mirror, pc.turns);
+      final tone = k == 0 ? 0 : (k == 1 ? 1 : 2);
+      final earlier = Set<GridPoint>.of(out.keys);
+      for (final c in art.keys) {
+        final p = GridPoint(c.x + ox, c.y + oy);
+        if (earlier.contains(p) ||
+            earlier.contains(GridPoint(p.x + 1, p.y)) ||
+            earlier.contains(GridPoint(p.x - 1, p.y)) ||
+            earlier.contains(GridPoint(p.x, p.y + 1)) ||
+            earlier.contains(GridPoint(p.x, p.y - 1))) {
+          continue;
+        }
+        out[p] = tone;
+      }
+    }
+    return _thicken(out, grid, thickeningFor(grid));
+  }
+
+  /// Analytic geometry first, then the designed art / procedural masks.
+  static Map<GridPoint, int> _expansionArt(String name, int size) {
+    final geo = ExpansionShapes.fit(name, size);
+    if (geo != null) return {for (final c in geo) c: 0};
+    return _art(name, size);
+  }
+
+  /// Cuts a one-cell channel along the outline of a copy of [base] scaled
+  /// by [scale] about its centre: the shape becomes an outer band around a
+  /// smaller version of itself.
+  static Map<GridPoint, int> _cutRing(
+    Map<GridPoint, int> art,
+    Map<GridPoint, int> base,
+    double scale,
+  ) {
+    if (base.isEmpty) return art;
+    var sx = 0.0, sy = 0.0;
+    for (final c in base.keys) {
+      sx += c.x;
+      sy += c.y;
+    }
+    final cx = sx / base.length, cy = sy / base.length;
+    bool inCopy(int x, int y) => base.containsKey(
+      GridPoint(
+        (cx + (x - cx) / scale).round(),
+        (cy + (y - cy) / scale).round(),
+      ),
+    );
+    return {
+      for (final e in art.entries)
+        if (inCopy(e.key.x, e.key.y) ||
+            !(inCopy(e.key.x + 1, e.key.y) ||
+                inCopy(e.key.x - 1, e.key.y) ||
+                inCopy(e.key.x, e.key.y + 1) ||
+                inCopy(e.key.x, e.key.y - 1)))
+          e.key: e.value,
+    };
+  }
+
+  /// Mirrors (left-right) and turns (quarter turns clockwise) [art] within
+  /// its [size] box.
+  static Map<GridPoint, int> _orient(
+    Map<GridPoint, int> art,
+    int size,
+    bool mirror,
+    int turns,
+  ) {
+    if (!mirror && turns % 4 == 0) return art;
+    final m = size - 1;
+    return {
+      for (final e in art.entries)
+        () {
+          var x = mirror ? m - e.key.x : e.key.x, y = e.key.y;
+          for (int t = 0; t < turns % 4; t++) {
+            final nx = m - y;
+            y = x;
+            x = nx;
+          }
+          return GridPoint(x, y);
+        }(): e.value,
+    };
   }
 
   /// Size of each shape on a combination board of [grid] cells.

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import '../../models/level.dart';
 import '../../models/puzzle_path.dart';
+import 'expansion_catalog.dart';
 
 /// World / Stage definitions for shape-driven progression.
 /// Each world has a clear visual theme and increasing difficulty.
@@ -289,6 +290,116 @@ class LevelWorlds {
     ],
   );
 
+  // ============ Expansion (1001-2000) ============
+  // Ten 100-level worlds continuing past Level 1000. Display names, masks,
+  // board sizes and tiler settings come from ExpansionCatalog; the shape
+  // lists here are documentation only.
+  static const WorldInfo world12 = WorldInfo(
+    world: 12,
+    title: 'Master Shapes',
+    category: 'Master Shapes',
+    startId: 1001,
+    endId: 1100,
+    gridSize: 48,
+    shapes: ['Triangle', 'Circle', 'Star', 'Heart', 'Crescent', 'Crown'],
+  );
+
+  static const WorldInfo world13 = WorldInfo(
+    world: 13,
+    title: 'Complex Patterns',
+    category: 'Complex Patterns',
+    startId: 1101,
+    endId: 1200,
+    gridSize: 48,
+    shapes: [
+      'Spiral',
+      'Honeycomb',
+      'Sunburst',
+      'Woven Lattice',
+      'Concentric Diamonds',
+    ],
+  );
+
+  static const WorldInfo world14 = WorldInfo(
+    world: 14,
+    title: 'Nature Combinations',
+    category: 'Nature Combinations',
+    startId: 1201,
+    endId: 1300,
+    gridSize: 48,
+    shapes: ['Flower + Butterfly', 'Tree + Sun', 'Tree + Sun + Cloud'],
+  );
+
+  static const WorldInfo world15 = WorldInfo(
+    world: 15,
+    title: 'Animal Combinations',
+    category: 'Animal Combinations',
+    startId: 1301,
+    endId: 1400,
+    gridSize: 48,
+    shapes: ['Cat + Fish', 'Owl + Tree', 'Elephant + Giraffe + Lion'],
+  );
+
+  static const WorldInfo world16 = WorldInfo(
+    world: 16,
+    title: 'Object Combinations',
+    category: 'Object Combinations',
+    startId: 1401,
+    endId: 1500,
+    gridSize: 48,
+    shapes: ['House + Car', 'Key + Lock', 'Rocket + Star + Moon'],
+  );
+
+  static const WorldInfo world17 = WorldInfo(
+    world: 17,
+    title: 'Landmark Combinations',
+    category: 'Landmark Combinations',
+    startId: 1501,
+    endId: 1600,
+    gridSize: 48,
+    shapes: ['Castle + Tower', 'Pyramid + Sun', 'Lighthouse + Boat + Cloud'],
+  );
+
+  static const WorldInfo world18 = WorldInfo(
+    world: 18,
+    title: 'Multi-Shape Puzzles',
+    category: 'Multi-Shape Puzzles',
+    startId: 1601,
+    endId: 1700,
+    gridSize: 48,
+    shapes: ['House + Tree + Sun', 'House + Tree + Sun + Cloud'],
+  );
+
+  static const WorldInfo world19 = WorldInfo(
+    world: 19,
+    title: 'Expert Combinations',
+    category: 'Expert Combinations',
+    startId: 1701,
+    endId: 1800,
+    gridSize: 48,
+    shapes: ['Object + Geometry + Pattern'],
+  );
+
+  static const WorldInfo world20 = WorldInfo(
+    world: 20,
+    title: 'Master Challenges',
+    category: 'Master Challenges',
+    startId: 1801,
+    endId: 1900,
+    gridSize: 48,
+    shapes: ['Three and four shape boards'],
+  );
+
+  static const WorldInfo world21 = WorldInfo(
+    world: 21,
+    title: 'Ultimate Challenges',
+    category: 'Ultimate Challenges',
+    startId: 1901,
+    endId: 2000,
+    gridSize: 48,
+    shapes: ['Four shape boards'],
+  );
+
   static const List<WorldInfo> all = [
     world1,
     world2,
@@ -301,6 +412,16 @@ class LevelWorlds {
     world9,
     world10,
     world11,
+    world12,
+    world13,
+    world14,
+    world15,
+    world16,
+    world17,
+    world18,
+    world19,
+    world20,
+    world21,
   ];
 
   static WorldInfo worldFor(int levelId) {
@@ -327,8 +448,12 @@ class LevelWorlds {
   /// From Level 21 boards grow continuously from 24x24 to 42x42 (fast
   /// early, then steady), giving finer, denser arrow constructions;
   /// combination levels start at 28 so both shapes stay large.
+  /// Levels 1001-2000 continue from 43x43 to 48x48 ([ExpansionCatalog]).
   static int gridSizeFor(int levelId) {
     if (levelId <= 20) return worldFor(levelId).gridSize;
+    if (ExpansionCatalog.covers(levelId)) {
+      return ExpansionCatalog.gridSizeFor(levelId);
+    }
     final t = ((levelId - 21) / (1000 - 21)).clamp(0.0, 1.0);
     final size = 24 + (18 * math.sqrt(t)).round();
     if (extendedComponents(levelId).length >= 2) return math.max(28, size);
@@ -400,6 +525,9 @@ class LevelWorlds {
 
   /// Component mask names for [levelId] (1 for single-template levels).
   static List<String> extendedComponents(int levelId) {
+    if (ExpansionCatalog.covers(levelId)) {
+      return [for (final p in ExpansionCatalog.piecesFor(levelId)) p.name];
+    }
     final pool = objectPool;
     if (levelId >= 96 && levelId <= 200) {
       final a = pool[(levelId * 7 + 3) % pool.length];
@@ -440,6 +568,10 @@ class LevelWorlds {
   /// Composition layout for [levelId]: the two shapes staggered along the
   /// main diagonal ('diagonal') or the other one ('antiDiagonal').
   static String extendedLayout(int levelId) {
+    if (ExpansionCatalog.covers(levelId)) {
+      const names = ['single', 'pair', 'trio', 'quad'];
+      return names[extendedComponents(levelId).length - 1];
+    }
     if (extendedComponents(levelId).length < 2) return 'single';
     return levelId.isEven ? 'diagonal' : 'antiDiagonal';
   }
@@ -447,8 +579,7 @@ class LevelWorlds {
   /// Display name shared by level metadata and tile labels.
   static String extendedDisplayName(int levelId) {
     final comps = extendedComponents(levelId);
-    if (comps.length == 1) return comps.first;
-    return '${comps[0]} + ${comps[1]}';
+    return comps.join(' + ');
   }
 }
 

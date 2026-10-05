@@ -29,7 +29,8 @@ void main() {
     expect(find.text('Arrow Escape'), findsOneWidget);
     expect(find.text('Continue'), findsOneWidget);
     expect(find.text('Levels'), findsOneWidget);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Leaderboard'), findsOneWidget);
+    expect(find.byTooltip('Settings'), findsOneWidget);
   });
 
   testWidgets('Game screen minimal controls fit on small screen without overflow',

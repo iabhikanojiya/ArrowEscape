@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../repositories/generated_level_repository.dart';
 import '../../services/audio/audio_service.dart';
 import '../../services/haptics/haptic_service.dart';
+import '../../services/play_games_service.dart';
 import '../../services/storage/storage_service.dart';
 import '../../widgets/banner_ad_widget.dart';
 import '../../widgets/economy_chips.dart';
@@ -83,6 +84,22 @@ class _HomeScreenState extends State<HomeScreen>
     Navigator.pushNamed(context, '/settings').then((_) => _loadProgress());
   }
 
+  Future<void> _openLeaderboard() async {
+    HapticService.lightImpact();
+    AudioService.instance.play(GameSound.button);
+    final opened = await PlayGamesService.instance.showLeaderboards();
+    if (opened || !mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: const Text(
+            'Google Play Games isn\'t available right now. Please try again.'),
+        behavior: SnackBarBehavior.floating,
+        shape:
+            RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _logoController.dispose();
@@ -97,14 +114,17 @@ class _HomeScreenState extends State<HomeScreen>
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
-              child: Align(
-                alignment: Alignment.centerRight,
-                child: const CoinChip()
-                    .animate()
-                    .fadeIn(duration: 350.ms)
-                    .slideY(begin: -0.4, end: 0, curve: Curves.easeOut),
-              ),
+              padding: const EdgeInsets.fromLTRB(20, 10, 20, 0),
+              child: Row(
+                children: [
+                  _SettingsButton(onTap: _navigateToSettings),
+                  const Spacer(),
+                  const CoinChip(),
+                ],
+              )
+                  .animate()
+                  .fadeIn(duration: 350.ms)
+                  .slideY(begin: -0.4, end: 0, curve: Curves.easeOut),
             ),
             const Spacer(flex: 5),
             _buildHero(),
@@ -127,9 +147,9 @@ class _HomeScreenState extends State<HomeScreen>
                       const SizedBox(width: 12),
                       Expanded(
                         child: _SoftAction(
-                          icon: Icons.tune_rounded,
-                          label: 'Settings',
-                          onTap: _navigateToSettings,
+                          icon: Icons.leaderboard_rounded,
+                          label: 'Leaderboard',
+                          onTap: _openLeaderboard,
                         ),
                       ),
                     ],
@@ -324,20 +344,59 @@ class _SoftAction extends StatelessWidget {
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: onTap,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(icon, size: 20, color: AppTheme.ink),
-              const SizedBox(width: 9),
-              Text(
-                label,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                  color: AppTheme.ink,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, size: 20, color: AppTheme.ink),
+                const SizedBox(width: 9),
+                // Scales down instead of overflowing on narrow screens or
+                // large system font sizes.
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      label,
+                      maxLines: 1,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.ink,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact Settings control for the top bar, styled like [_SoftAction].
+class _SettingsButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _SettingsButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: 'Settings',
+      child: SizedBox(
+        width: 40,
+        height: 40,
+        child: Material(
+          color: AppTheme.chipFill,
+          borderRadius: BorderRadius.circular(14),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: const Icon(Icons.tune_rounded,
+                size: 20, color: AppTheme.ink),
           ),
         ),
       ),

@@ -4,6 +4,7 @@ import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 import '../core/config/ad_config.dart';
 import '../models/reward_purpose.dart';
+import 'consent_service.dart';
 
 class AdmobService {
   AdmobService._();
@@ -38,6 +39,8 @@ class AdmobService {
   }
 
   void loadRewarded() {
+    // No ad requests until UMP consent allows them.
+    if (!ConsentService.instance.canRequestAds) return;
     if (_isLoadingRewarded) return;
     if (_rewardedAd != null) return;
     _isLoadingRewarded = true;

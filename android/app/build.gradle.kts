@@ -62,3 +62,9 @@ android {
 flutter {
     source = "../.."
 }
+
+dependencies {
+    // Play Games Services v2 (same version the games_services plugin uses);
+    // needed for PlayGamesSdk.initialize() in MainApplication.
+    implementation("com.google.android.gms:play-services-games-v2:21.0.0")
+}

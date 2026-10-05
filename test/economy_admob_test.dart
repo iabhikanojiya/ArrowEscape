@@ -10,6 +10,7 @@ import 'package:arrow_escape/screens/game/game_screen.dart';
 import 'package:arrow_escape/screens/home/home_screen.dart';
 import 'package:arrow_escape/screens/level_select/level_select_screen.dart';
 import 'package:arrow_escape/screens/settings/settings_screen.dart';
+import 'package:arrow_escape/services/achievements/achievement_service.dart';
 import 'package:arrow_escape/services/admob_service.dart';
 import 'package:arrow_escape/services/economy/economy_service.dart';
 import 'package:arrow_escape/widgets/banner_ad_widget.dart';
@@ -82,6 +83,8 @@ void main() {
     await EconomyProvider.instance.init();
     AdmobService.debugShowRewardedHandler = null;
     AdmobService.instance.debugReset();
+    // Fresh achievement queue per test: a test can end mid-unlock.
+    AchievementService.setInstance(null);
   });
 
   tearDown(() {

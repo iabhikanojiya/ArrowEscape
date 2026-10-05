@@ -5,18 +5,21 @@ import '../../models/level.dart';
 import '../../models/puzzle_path.dart';
 import 'curated_levels.dart';
 import 'dense_tiler.dart';
+import 'expansion_catalog.dart';
 import 'extended_templates.dart';
 import 'level_quality.dart';
 import 'level_world.dart';
 
 /// Shape-driven level generator.
 ///
-/// Levels 1-20 are the curated boards, returned verbatim. Levels 21-1000
+/// Levels 1-20 are the curated boards, returned verbatim. Levels 21-2000
 /// are built from the designed silhouette for the level's name
 /// ([ExtendedTemplates.buildMask]) and filled completely with arrows by
 /// [DenseTiler]. Board size ([LevelWorlds.gridSizeFor]) and puzzle settings
 /// ([paramsFor]) rise continuously with the level number, and every level
-/// is validated with [PuzzleSolver] before it is accepted.
+/// is validated with [PuzzleSolver] before it is accepted. Levels 1001-2000
+/// take their settings from [ExpansionCatalog] and must also reach a
+/// minimum dependency depth; Levels 21-1000 are generated exactly as before.
 class ShapeLevelGenerator {
   /// Dev-time quality-gate counters (no gameplay impact).
   static int candidatesTested = 0;
@@ -31,8 +34,12 @@ class ShapeLevelGenerator {
 
   /// Valid candidate tilings compared per level (more as levels rise); the
   /// one with the deepest dependency chains is kept.
-  static int _candidatesFor(int levelId) =>
-      levelId < 56 ? 1 : (levelId < 200 ? 2 : (levelId < 901 ? 3 : 4));
+  static int _candidatesFor(int levelId) {
+    if (ExpansionCatalog.covers(levelId)) {
+      return ExpansionCatalog.candidatesFor(levelId);
+    }
+    return levelId < 56 ? 1 : (levelId < 200 ? 2 : (levelId < 901 ? 3 : 4));
+  }
 
   /// Public entry: generates a shape-driven level for [levelId] that is
   /// guaranteed solvable and shows its named shape.
@@ -45,11 +52,14 @@ class ShapeLevelGenerator {
     return _generateExtended(levelId);
   }
 
-  /// Puzzle settings for [levelId] (21-1000), rising continuously: a
+  /// Puzzle settings for [levelId] (21-2000), rising continuously: a
   /// mix of short, medium and long arrows that gets longer and more bent,
   /// deeper dependency chains, fewer free opening moves. The board itself
   /// grows via [LevelWorlds.gridSizeFor].
   static TilerParams paramsFor(int levelId) {
+    if (ExpansionCatalog.covers(levelId)) {
+      return ExpansionCatalog.paramsFor(levelId);
+    }
     final t = ((levelId - 21) / (1000 - 21)).clamp(0.0, 1.0);
     final d = math.pow(t, 0.7).toDouble();
     return TilerParams(
@@ -81,34 +91,71 @@ class ShapeLevelGenerator {
     Level? best;
     List<num>? bestKey;
     final candidates = _candidatesFor(levelId);
-    final attemptsPerPiece = 48 + (levelId * 32 ~/ 1000);
+    final expansion = ExpansionCatalog.covers(levelId);
+    final attemptsPerPiece = expansion
+        ? ExpansionCatalog.attemptsPerPieceFor(levelId)
+        : 48 + (levelId * 32 ~/ 1000);
+    // Expansion levels: candidates below the target depth don't count as
+    // accepted, so extra seeds are tried until enough reach it.
+    final minDepth = expansion ? ExpansionCatalog.targetDepthFor(levelId) : 0;
     var accepted = 0;
-    // Extra seeds are only used if a candidate fails validation.
+    var bestDepth = 0;
+    // Extra seeds are only used if a candidate fails validation. Expansion
+    // levels also keep trying (up to 8 more seeds) while the best candidate
+    // is below the level's depth floor.
+    final floor = expansion ? ExpansionCatalog.depthFloorFor(levelId) : 0;
     for (int attempt = 0;
-        attempt < candidates + 4 && accepted < candidates;
+        (attempt < candidates + 4 && accepted < candidates) ||
+            (expansion && attempt < candidates + 12 && bestDepth < floor);
         attempt++) {
       final seed = (levelId * 2654435761 + attempt * 7919) & 0x7FFFFFFF;
+      final rescue = expansion && attempt >= candidates + 4;
       final paths = DenseTiler.tile(regions, grid,
-          seed: seed, params: params, attemptsPerPiece: attemptsPerPiece);
+          seed: seed,
+          params: rescue ? ExpansionCatalog.rescueParamsFor(levelId) : params,
+          attemptsPerPiece: attemptsPerPiece);
       candidatesTested++;
       final level = _withMeta(levelId, world, grid, paths);
       // Validate (solver, silhouette coverage, noise) before accepting.
-      final q = LevelQuality.measure(level, target);
+      final q = expansion
+          ? LevelQuality.measureFast(level, target)
+          : LevelQuality.measure(level, target);
       if (!q.solvable) {
         rejectedUnsolvable++;
         continue;
       }
-      if (!q.acceptable) {
+      // Rescue candidates may use a few more one-cell arrows.
+      final ok = q.acceptable ||
+          (rescue &&
+              q.solvable &&
+              q.shapeCoverage >= 0.98 &&
+              q.outsideNoise == 0 &&
+              q.singles <=
+                  (q.arrows * ExpansionCatalog.rescueSingleShare).floor());
+      if (!ok) {
         rejectedShape++;
-        if (best != null) continue;
-      } else {
+        // Expansion levels rank every candidate (acceptable ones first).
+        if (best != null && !expansion) continue;
+      } else if (q.depth >= minDepth) {
         accepted++;
       }
       // Prefer acceptable, then deeper chains, then fewer free openings.
-      final key = [q.acceptable ? 0 : 1, -q.depth, q.freeRatio];
+      // Expansion levels prefer reaching the target depth, staying close to
+      // it (a steady ramp) with the fewest opening moves; else the deepest.
+      final reach = q.depth >= minDepth;
+      final key = expansion
+          ? [
+              ok ? 0 : 1,
+              reach ? 0 : 1,
+              reach ? (q.depth - minDepth) ~/ 4 : -q.depth,
+              q.initialMoves,
+              q.depth,
+            ]
+          : [q.acceptable ? 0 : 1, -q.depth, q.freeRatio];
       if (bestKey == null || _less(key, bestKey)) {
         bestKey = key;
         best = level;
+        bestDepth = q.depth;
       }
     }
     return best ?? _withMeta(levelId, world, grid, const []);

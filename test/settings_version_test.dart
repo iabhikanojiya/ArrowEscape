@@ -21,6 +21,8 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(find.text('Version'), 200);
+    // Rows built by the scroll start delayed entrance animations.
+    await tester.pump(const Duration(seconds: 1));
     expect(find.text('Version'), findsOneWidget);
     // The value comes straight from pubspec.yaml's `version:` line.
     final pubspec = File('pubspec.yaml').readAsStringSync();

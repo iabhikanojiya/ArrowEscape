@@ -25,9 +25,11 @@ void main() {
     expect(find.text('Level 3'), findsOneWidget);
     expect(find.text('2 / ${AppConstants.maxLevels}'), findsOneWidget);
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
 
+    await tester.scrollUntilVisible(find.text('Reset progress'), 200,
+        scrollable: find.byType(Scrollable).last);
     expect(find.text('Reset coins'), findsNothing);
     expect(find.text('Reset progress'), findsOneWidget);
 

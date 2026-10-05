@@ -18,8 +18,10 @@ import 'screens/settings/settings_screen.dart';
 import 'services/admob_service.dart';
 import 'services/app_update_service.dart';
 import 'services/audio/audio_service.dart';
+import 'services/consent_service.dart';
 import 'services/economy/economy_service.dart';
 import 'services/haptics/haptic_service.dart';
+import 'services/play_games_service.dart';
 import 'services/settings/settings_service.dart';
 
 Future<void> main() async {
@@ -44,7 +46,10 @@ Future<void> main() async {
   unawaited(AudioService.instance
       .initialize(settings: settings)
       .catchError((_) {}));
-  unawaited(_initAds());
+  // UMP consent (EEA/UK/CH): ads start only once consent allows them.
+  _initAdsWhenAllowed();
+  // Google Play Games v2 silent sign-in; the game never waits on it.
+  unawaited(PlayGamesService.instance.initialize());
   // Google Play in-app update check (once per launch, after startup).
   AppUpdateService.instance.start();
 }
@@ -77,6 +82,21 @@ Future<void> _initAds() async {
   try {
     await AdmobService.instance.initialize();
   } catch (_) {}
+}
+
+/// Starts the Mobile Ads SDK as soon as UMP says ads may be requested:
+/// immediately when consent from an earlier launch allows it, otherwise
+/// after the consent form (or later, if the user changes their choice).
+void _initAdsWhenAllowed() {
+  final consent = ConsentService.instance;
+  void initIfAllowed() {
+    if (consent.canRequestAds && !AdmobService.instance.isInitialized) {
+      unawaited(_initAds());
+    }
+  }
+
+  consent.canRequestAdsListenable.addListener(initIfAllowed);
+  unawaited(consent.gatherConsent());
 }
 
 class ArrowEscapeApp extends StatelessWidget {

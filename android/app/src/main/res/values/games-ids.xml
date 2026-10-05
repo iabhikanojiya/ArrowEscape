@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Google Play Games Services v2 project ID (Play Console >
+         Play Games Services > Configuration). Not a secret. -->
+    <string name="game_services_project_id" translatable="false">227368534831</string>
+</resources>

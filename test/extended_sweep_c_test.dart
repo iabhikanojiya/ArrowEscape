@@ -1,4 +1,6 @@
 @Timeout(Duration(minutes: 25))
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:arrow_escape/game/levels/level_world.dart';
 import 'package:arrow_escape/game/levels/shape_level_generator.dart';

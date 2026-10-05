@@ -13,6 +13,7 @@ import '../../models/level.dart';
 import '../../models/puzzle_path.dart';
 import '../../models/reward_purpose.dart';
 import '../../repositories/generated_level_repository.dart';
+import '../../services/achievements/achievement_service.dart';
 import '../../services/admob_service.dart';
 import '../../services/audio/audio_service.dart';
 import '../../services/economy/economy_service.dart';
@@ -349,6 +350,9 @@ class _GameScreenState extends State<GameScreen> {
 
     await _economy.addCoins(3);
     _lastRewardCoins = 3;
+    // Unlocks First Step / world achievements right away, after the +3 so the
+    // level reward never waits on it. Rewards are still claimed manually.
+    unawaited(AchievementService.instance.syncUnlocks());
     _lastWasFirstCompletion = !wasAlreadyCompleted;
   }
 
@@ -452,7 +456,6 @@ class _GameScreenState extends State<GameScreen> {
   Future<void> _handleHintRewardedFlow() async {
     if (_isHintRewardLoading || _isHintProcessing) return;
     setState(() => _isHintRewardLoading = true);
-    debugPrint('[HINT DEBUG] rewarded hint requested');
     AnalyticsService.logRewardedAdStarted('hint', widget.levelNumber);
     AnalyticsService.logCrashlytics(
       'rewarded_ad_started placement=hint level=${widget.levelNumber}',
@@ -461,32 +464,23 @@ class _GameScreenState extends State<GameScreen> {
     final earned = await AdmobService.instance.showRewarded(
       purpose: RewardPurpose.hint,
     );
-    debugPrint(
-        '[HINT DEBUG] reward callback received | earned = $earned | mounted = $mounted');
     if (!mounted) {
       setState(() => _isHintRewardLoading = false);
       return;
     }
     setState(() => _isHintRewardLoading = false);
     if (earned) {
-      debugPrint('[HINT DEBUG] reward confirmed | purpose = hint');
-      debugPrint('[HINT DEBUG] current level = ${widget.levelNumber}');
       AnalyticsService.logRewardedAdCompleted('hint', widget.levelNumber);
       AnalyticsService.setCrashlyticsContext(level: widget.levelNumber);
       // Find the hint NOW, against the current puzzle state.
       final hintPath = await _findHint();
-      debugPrint('[HINT DEBUG] current hint path = ${hintPath?.id}');
       if (hintPath == null) {
-        debugPrint('[HINT DEBUG] no valid hint for current state');
         return;
       }
       if (!mounted) return;
       // Reward = exactly ONE free hint. Coins are NOT touched.
-      debugPrint('[HINT DEBUG] displaying hint');
       _showHintDisplay(hintPath);
-      debugPrint('[HINT DEBUG] PuzzleBoard rebuild requested');
     } else {
-      debugPrint('[HINT DEBUG] ad closed without reward or unavailable');
       AnalyticsService.logRewardedAdFailed('hint', 'no_ad_available');
       if (!mounted) return;
       showDialog(
@@ -529,30 +523,29 @@ class _GameScreenState extends State<GameScreen> {
 
       await _economy.init();
       final coins = await _economy.getCoins();
-      debugPrint('[HINT DEBUG] coins = $coins');
-      if (coins >= 10) {
-        debugPrint('[HINT DEBUG] spending 10 coins');
-        final spent = await _economy.spendCoins(10);
+      if (coins >= AppConstants.hintCostCoins) {
+        final spent = await _economy.spendCoins(AppConstants.hintCostCoins);
         if (!spent) {
           _isHintProcessing = false;
           if (mounted) setState(() {});
           return;
         }
-        debugPrint('[HINT DEBUG] current hint path = ${hintPath.id}');
-        AnalyticsService.logCoinsSpent(10, 'hint', widget.levelNumber);
+        AnalyticsService.logCoinsSpent(
+          AppConstants.hintCostCoins,
+          'hint',
+          widget.levelNumber,
+        );
         AnalyticsService.logHintUsed(widget.levelNumber, 'coins');
         final coinsAfter = await _economy.getCoins().catchError((_) => 0);
         AnalyticsService.setCrashlyticsContext(coins: coinsAfter);
         AnalyticsService.logCrashlytics(
-          'hint_used method=coins level=${widget.levelNumber} coins_spent=10 coins=$coinsAfter',
+          'hint_used method=coins level=${widget.levelNumber} coins_spent=${AppConstants.hintCostCoins} coins=$coinsAfter',
         );
-        debugPrint('[HINT DEBUG] displaying hint | PuzzleBoard rebuild requested');
         _showHintDisplay(hintPath);
         _isHintProcessing = false;
         if (mounted) setState(() {});
         return;
       }
-      debugPrint('[HINT DEBUG] insufficient coins');
 
       // Do NOT show the glow yet. The hint is found and displayed only
       // AFTER the rewarded ad confirms the reward.

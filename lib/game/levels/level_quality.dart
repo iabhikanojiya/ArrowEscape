@@ -55,6 +55,46 @@ class LevelQuality {
       outsideNoise == 0 &&
       singles <= math.max(3, (arrows * 0.06).floor());
 
+  /// Same measurements as [measure] from a single [PuzzleSolver.peelRounds]
+  /// pass (the algorithm [PuzzleSolver.solve] itself uses for boards of
+  /// more than 12 arrows): solvable when every arrow is peeled, depth is
+  /// the number of rounds, opening moves the first round. Used to compare
+  /// many candidates quickly on the large expansion boards.
+  static LevelQuality measureFast(Level level, Set<GridPoint> target) {
+    final paths = level.puzzlePaths;
+    final cells = <GridPoint>{};
+    var totalLength = 0, maxLength = 0, bends = 0, singles = 0;
+    for (final p in paths) {
+      final occ = p.occupiedCells;
+      cells.addAll(occ);
+      totalLength += occ.length;
+      maxLength = math.max(maxLength, occ.length);
+      if (p.points.length >= 3) bends += p.points.length - 2;
+      if (occ.length == 1) singles++;
+    }
+    final inside = cells.where(target.contains).length;
+    final n = paths.length;
+    final rounds = PuzzleSolver.peelRounds(
+      level.createPuzzlePaths(),
+      level.gridSize,
+    );
+    final removed = rounds.fold<int>(0, (s, r) => s + r.length);
+    final solvable = n > 12 && removed == n;
+    return LevelQuality(
+      shapeCoverage: target.isEmpty ? 0 : inside / target.length,
+      outsideNoise: cells.isEmpty ? 1 : (cells.length - inside) / cells.length,
+      occupancy: cells.length / (level.gridSize * level.gridSize),
+      arrows: n,
+      avgLength: n == 0 ? 0 : totalLength / n,
+      maxLength: maxLength,
+      bendsPerArrow: n == 0 ? 0 : bends / n,
+      singles: singles,
+      solvable: solvable,
+      depth: solvable ? rounds.length : 0,
+      initialMoves: rounds.isEmpty ? 0 : rounds.first.length,
+    );
+  }
+
   static LevelQuality measure(Level level, Set<GridPoint> target) {
     final paths = level.puzzlePaths;
     final cells = <GridPoint>{};
